@@ -48,7 +48,13 @@ public class SecurityConfig {
                 // Reglas de autorización de endpoints
                 .authorizeHttpRequests(auth -> auth
                         // 1. Endpoints de autenticación y registro
-                        .requestMatchers("/usuarios/registro", "/usuarios/login", "/usuarios/recuperar-clave").permitAll()
+                        // En securityFilterChain:
+                        .requestMatchers(
+                                "/usuarios/registro",
+                                "/usuarios/login",
+                                "/usuarios/activar-cuenta",
+                                "/usuarios/recuperar-clave/**"
+                        ).permitAll()
 
                         // 2. Catálogo público de la tienda (Storefront)
                         .requestMatchers(HttpMethod.GET, "/catalogo/productos/**", "/catalogo/categorias/**").permitAll()
