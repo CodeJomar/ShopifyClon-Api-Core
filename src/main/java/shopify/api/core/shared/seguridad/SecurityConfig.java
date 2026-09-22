@@ -48,7 +48,6 @@ public class SecurityConfig {
                 // Reglas de autorización de endpoints
                 .authorizeHttpRequests(auth -> auth
                         // 1. Endpoints de autenticación y registro
-                        // En securityFilterChain:
                         .requestMatchers(
                                 "/usuarios/registro",
                                 "/usuarios/login",
@@ -68,6 +67,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+
+                        .requestMatchers(HttpMethod.GET, "/tiendas/*").permitAll()
 
                         // Cualquier otra petición requiere autenticación por token JWT
                         .anyRequest().authenticated()
