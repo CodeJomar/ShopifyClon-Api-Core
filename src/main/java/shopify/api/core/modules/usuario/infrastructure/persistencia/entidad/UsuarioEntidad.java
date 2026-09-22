@@ -2,9 +2,6 @@ package shopify.api.core.modules.usuario.infrastructure.persistencia.entidad;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -33,9 +30,4 @@ public class UsuarioEntidad extends AuditoriaEntidad {
 
     @Column(name = "\"EstaActivo\"", nullable = false)
     private Boolean estaActivo = true;
-
-    // Relación opcional/directa con el rol principal
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "\"RolId\"")
-    private RolEntidad rol;
 }
