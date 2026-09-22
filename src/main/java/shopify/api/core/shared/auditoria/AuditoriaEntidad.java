@@ -1,4 +1,4 @@
-package shopify.api.core.shared.infraestructura.persistencia;
+package shopify.api.core.shared.auditoria;
 
 import jakarta.persistence.*;
 import lombok.Getter;

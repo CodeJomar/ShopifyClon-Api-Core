@@ -1,4 +1,4 @@
-package shopify.api.core.shared.seguridad;
+package shopify.api.core.shared.auditoria;
 
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.security.core.Authentication;
@@ -21,7 +21,6 @@ public class AuditorAwareImpl implements AuditorAware<UUID> {
         }
 
         try {
-            // El principal o nombre de autenticación contiene el UUID del usuario
             return Optional.of(UUID.fromString(authentication.getName()));
         } catch (IllegalArgumentException e) {
             return Optional.empty();

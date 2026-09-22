@@ -7,7 +7,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 
 @Getter
@@ -18,7 +17,6 @@ public class RespuestaApi<T> {
     private int codigoEstado;
     private String mensaje;
     private T datos;
-    private PaginacionMetadata paginacion;
     private String error;
     private String ruta;
     private Map<String, String> validaciones;
@@ -26,6 +24,9 @@ public class RespuestaApi<T> {
 
     // --- MÉTODOS ESTÁTICOS DE ÉXITO ---
 
+    /**
+     * Respuesta exitosa estándar (200 OK) para consultas individuales o datos directos.
+     */
     public static <T> ResponseEntity<RespuestaApi<T>> ok(T datos, String mensaje) {
         RespuestaApi<T> respuesta = RespuestaApi.<T>builder()
                 .exito(true)
@@ -37,6 +38,9 @@ public class RespuestaApi<T> {
         return ResponseEntity.ok(respuesta);
     }
 
+    /**
+     * Respuesta exitosa para creaciones (201 Created).
+     */
     public static <T> ResponseEntity<RespuestaApi<T>> creado(T datos, String mensaje) {
         RespuestaApi<T> respuesta = RespuestaApi.<T>builder()
                 .exito(true)
@@ -48,13 +52,18 @@ public class RespuestaApi<T> {
         return ResponseEntity.status(HttpStatus.CREATED).body(respuesta);
     }
 
-    public static <T> ResponseEntity<RespuestaApi<List<T>>> paginado(Page<T> pagina, String mensaje) {
-        RespuestaApi<List<T>> respuesta = RespuestaApi.<List<T>>builder()
+    /**
+     * Respuesta exitosa para listados paginados (200 OK).
+     * Los datos viajan envueltos en ConsultaPaginadaDto sin necesidad de PaginacionMetadata.
+     */
+    public static <T> ResponseEntity<RespuestaApi<ConsultaPaginadaDto<T>>> paginado(Page<T> pagina, String mensaje) {
+        ConsultaPaginadaDto<T> datosPaginados = ConsultaPaginadaDto.desdePagina(pagina);
+
+        RespuestaApi<ConsultaPaginadaDto<T>> respuesta = RespuestaApi.<ConsultaPaginadaDto<T>>builder()
                 .exito(true)
                 .codigoEstado(HttpStatus.OK.value())
                 .mensaje(mensaje)
-                .datos(pagina.getContent())
-                .paginacion(PaginacionMetadata.desdePagina(pagina))
+                .datos(datosPaginados)
                 .marcaTiempo(Instant.now())
                 .build();
         return ResponseEntity.ok(respuesta);
