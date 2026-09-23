@@ -18,8 +18,6 @@ public class ShopifyApplication {
 		new SpringApplicationBuilder(ShopifyApplication.class)
 				.initializers(new DotenvInitializer())
 				.run(args);
-
-		SpringApplication.run(ShopifyApplication.class, args);
 	}
 
 }
