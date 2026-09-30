@@ -1,0 +1,43 @@
+# ==============================================================================
+# .dockerignore — ShopifyClon API Core
+# Excluye todo lo innecesario del contexto de build Docker
+# ==============================================================================
+
+# --- Control de versiones ---
+.git
+.gitignore
+.gitattributes
+
+# --- IDEs ---
+.idea
+.vscode
+*.iml
+*.iws
+*.ipr
+
+# --- Build local (se reconstruye dentro del contenedor) ---
+target/
+
+# --- Secretos y variables de entorno (NUNCA dentro de la imagen) ---
+.env
+.env.*
+
+# --- Documentación ---
+README.md
+HELP.md
+LICENSE
+
+# --- Logs ---
+*.log
+
+# --- Docker (evitar recursión) ---
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Archivos de base de datos / SQL sueltos ---
+src/main/resources/db/
