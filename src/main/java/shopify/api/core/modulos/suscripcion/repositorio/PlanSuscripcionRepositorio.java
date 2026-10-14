@@ -10,5 +10,10 @@ public interface PlanSuscripcionRepositorio extends JpaRepository<PlanSuscripcio
 
     List<PlanSuscripcionEntidad> findByEsPublicoTrueAndEliminadoFalseOrderByOrdenAsc();
 
+    List<PlanSuscripcionEntidad> findByEliminadoFalseOrderByOrdenAscCodigoAsc();
+
     Optional<PlanSuscripcionEntidad> findByCodigoAndEliminadoFalse(String codigo);
+
+    /** El código es único también entre planes eliminados (UqPlanesSuscripcionCodigo). */
+    boolean existsByCodigo(String codigo);
 }
