@@ -84,6 +84,14 @@ public final class Rutas {
         return vitrina(subdominio) + "/tarifas-envio";
     }
 
+    public static String vitrinaCarrito(String subdominio) {
+        return vitrina(subdominio) + "/carrito";
+    }
+
+    public static String vitrinaCheckout(String subdominio) {
+        return vitrina(subdominio) + "/checkout";
+    }
+
     // Suscripción (propietario) y administración de la plataforma
     public static final String PANEL_SUSCRIPCION = "/panel/suscripcion";
     public static final String PLATAFORMA_PLANES = "/plataforma/planes";
