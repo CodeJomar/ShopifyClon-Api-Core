@@ -114,6 +114,20 @@ public abstract class PruebaIntegracionBase {
         return id;
     }
 
+    /**
+     * Tienda con prueba vigente (plan BASICO, 14 días): las escrituras del panel pasan SUS-017.
+     * {@link #crearTienda} sigue sin suscripción, para las pruebas del módulo suscripción que crean la suya.
+     */
+    protected UUID crearTiendaOperativa(UUID propietarioId) {
+        UUID id = crearTienda(propietarioId);
+        jdbc.update("INSERT INTO \"SuscripcionesTienda\" (\"TiendaId\", \"PlanId\", \"Estado\", \"CicloFacturacion\", "
+                + "\"PrecioPactado\", \"Moneda\", \"FechaFinPrueba\", \"InicioPeriodoActual\", \"FinPeriodoActual\") "
+                + "SELECT ?, \"Id\", 'PRUEBA', 'MENSUAL', \"PrecioMensual\", \"Moneda\", "
+                + "CURRENT_TIMESTAMP + INTERVAL '14 days', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '14 days' "
+                + "FROM \"PlanesSuscripcion\" WHERE \"Codigo\" = 'BASICO'", id);
+        return id;
+    }
+
     protected void agregarPersonal(UUID tiendaId, UUID usuarioId, String codigoRol) {
         // Los roles retirados por V3 (CLIENTE, ADMIN_TIENDA) se siembran ya eliminados, como quedan tras la migración
         boolean retirado = codigoRol.equals("CLIENTE") || codigoRol.equals("ADMIN_TIENDA");

@@ -19,7 +19,7 @@ class CuponTest extends PruebaCuponBase {
     @BeforeEach
     void preparar() {
         propietario = nuevaSesion();
-        tienda = crearTienda(propietario.id());
+        tienda = crearTiendaOperativa(propietario.id());
     }
 
     private UUID crearCupon(String codigo, String tipo, Object valor) throws Exception {
@@ -52,7 +52,7 @@ class CuponTest extends PruebaCuponBase {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.codigo").value("CUP-001"));
 
-        UUID otra = crearTienda(propietario.id());
+        UUID otra = crearTiendaOperativa(propietario.id());
         postJson(Rutas.PANEL_CUPONES, cuponJson("VERANO", "MONTO_FIJO", 5), propietario.token(), otra)
                 .andExpect(status().isCreated());
     }
@@ -83,7 +83,7 @@ class CuponTest extends PruebaCuponBase {
     @Test
     void cuponDeOtraTiendaResponde404() throws Exception {
         UUID cupon = crearCupon("PROPIO", "ENVIO_GRATIS", 0);
-        UUID otra = crearTienda(propietario.id());
+        UUID otra = crearTiendaOperativa(propietario.id());
 
         getConToken(Rutas.panelCupon(cupon), propietario.token(), otra)
                 .andExpect(status().isNotFound())

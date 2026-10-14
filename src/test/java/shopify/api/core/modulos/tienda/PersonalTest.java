@@ -87,12 +87,13 @@ class PersonalTest extends PruebaTiendaBase {
     }
 
     @Test
-    void sinSuscripcionVigenteElLimiteEsCero() throws Exception {
+    void sinSuscripcionVigenteNoSePuedeAgregarPersonal() throws Exception {
+        // SUS-017 se evalúa antes que el límite del plan: sin suscripción vigente el panel no escribe
         jdbc.update("UPDATE \"SuscripcionesTienda\" SET \"Estado\" = 'CANCELADA' WHERE \"TiendaId\" = ?", tienda);
 
         postJson(Rutas.PANEL_PERSONAL, invitar(nuevaSesion(), "GESTOR_PEDIDOS"), propietario.token(), tienda)
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.codigo").value("PER-002"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("SUS-017"));
     }
 
     @Test
