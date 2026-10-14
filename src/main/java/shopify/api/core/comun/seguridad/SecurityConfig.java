@@ -60,9 +60,6 @@ public class SecurityConfig {
                                 "/swagger-ui.html"
                         ).permitAll()
 
-                        // TEMPORAL: se elimina al reescribir catalogo (T-008)
-                        .requestMatchers(HttpMethod.GET, "/catalogo/productos/**", "/catalogo/categorias/**").permitAll()
-
                         // TEMPORAL: se elimina al reescribir pago (T-016)
                         .requestMatchers("/pagos/webhook/**").permitAll()
 

@@ -136,12 +136,14 @@ class SeguridadContextoTiendaTest extends PruebaIntegracionBase {
                 .andExpect(jsonPath("$.codigo").value("SEG-006"));
     }
 
+    /**
+     * Una ruta que no exige tienda ignora X-Tienda-Id: ni valida membresía ni responde 404 por una tienda ajena.
+     * Sustituye a la prueba de TenantContextHolder, que ya no existe (T-008).
+     */
     @Test
-    void elContextoNoQuedaEnElHiloTrasLaPeticion() throws Exception {
-        getConToken(Rutas.PRUEBA_PANEL, tokenPropietario, tienda).andExpect(status().isOk());
+    void rutaQueNoExigeTiendaIgnoraElEncabezado() throws Exception {
+        UUID ajena = UUID.randomUUID();
 
-        @SuppressWarnings("deprecation")
-        UUID residual = shopify.api.core.comun.seguridad.TenantContextHolder.getTenantId();
-        assertThat(residual).isNull();
+        getConToken(Rutas.CUENTA_PERFIL, tokenPropietario, ajena).andExpect(status().isOk());
     }
 }

@@ -17,11 +17,11 @@ import shopify.api.core.comun.excepcion.SolicitudInvalidaException;
 
 /**
  * Valida {@code X-Tienda-Id} contra la membresía del usuario (SEG-001), aplica {@code @RequierePermiso}
- * (SEG-002) y {@code @SoloAdministradorPlataforma} (SEG-006). Solo consulta la base si la petición trae el encabezado.
+ * (SEG-002) y {@code @SoloAdministradorPlataforma} (SEG-006). Solo mira el encabezado en las rutas que
+ * exigen tienda (con {@code @RequierePermiso} o un parámetro {@link ContextoTienda}).
  */
 @Component
 @RequiredArgsConstructor
-@SuppressWarnings("deprecation")
 public class ContextoTiendaInterceptor implements HandlerInterceptor {
 
     public static final String ENCABEZADO_TIENDA = "X-Tienda-Id";
@@ -45,41 +45,30 @@ public class ContextoTiendaInterceptor implements HandlerInterceptor {
 
         RequierePermiso requierePermiso = metodo.getMethodAnnotation(RequierePermiso.class);
         boolean exigeTienda = requierePermiso != null || recibeContextoTienda(metodo);
-
-        Optional<UUID> tiendaId = leerTiendaId(request);
-        if (tiendaId.isEmpty()) {
-            if (exigeTienda) {
-                throw new SolicitudInvalidaException("SEG-001", "Debes indicar la tienda en la que trabajas");
-            }
+        if (!exigeTienda) {
+            // Una ruta que no exige tienda ignora el encabezado por completo
             return true;
         }
+
+        UUID tiendaId = leerTiendaId(request)
+                .orElseThrow(() -> new SolicitudInvalidaException("SEG-001", "Debes indicar la tienda en la que trabajas"));
 
         Optional<UsuarioAutenticado> usuario = SesionActual.usuario();
         if (usuario.isEmpty()) {
             return true;
         }
 
-        ContextoTienda contexto = membresiaRepositorio.buscarCodigoRol(tiendaId.get(), usuario.get().id())
+        ContextoTienda contexto = membresiaRepositorio.buscarCodigoRol(tiendaId, usuario.get().id())
                 .flatMap(RolTienda::desdeCodigo)
-                .map(rol -> new ContextoTienda(tiendaId.get(), usuario.get().id(), rol))
+                .map(rol -> new ContextoTienda(tiendaId, usuario.get().id(), rol))
                 .orElseThrow(() -> new RecursoNoEncontradoException("SEG-001", "No encontramos esa tienda"));
 
         request.setAttribute(ATRIBUTO_CONTEXTO, contexto);
-        TenantContextHolder.setTenantId(contexto.tiendaId());
 
         if (requierePermiso != null) {
             contexto.exigir(requierePermiso.value());
         }
         return true;
-    }
-
-    @Override
-    public void afterCompletion(
-            @NonNull HttpServletRequest request,
-            @NonNull HttpServletResponse response,
-            @NonNull Object handler,
-            Exception ex) {
-        TenantContextHolder.clear();
     }
 
     private static Optional<UUID> leerTiendaId(HttpServletRequest request) {
