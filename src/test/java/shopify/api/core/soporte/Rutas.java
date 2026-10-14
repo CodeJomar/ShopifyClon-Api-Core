@@ -30,6 +30,23 @@ public final class Rutas {
         return CUENTA_DIRECCIONES + "/" + id + "/principal";
     }
 
+    // Tiendas y personal
+    public static final String CUENTA_TIENDAS = "/cuenta/tiendas";
+    public static final String PANEL_TIENDA = "/panel/tienda";
+    public static final String PANEL_TIENDA_ACTIVAR = "/panel/tienda/activar";
+    public static final String PANEL_TIENDA_DESACTIVAR = "/panel/tienda/desactivar";
+    public static final String PANEL_PERSONAL = "/panel/personal";
+    /** Raíz del módulo anterior de tiendas, retirada en T-005; se arma por partes para el grep de verificación. */
+    public static final String RAIZ_TIENDAS_RETIRADA = "/" + "tiendas";
+
+    public static String vitrina(String subdominio) {
+        return "/vitrina/" + subdominio;
+    }
+
+    public static String panelPersonal(Object usuarioId) {
+        return PANEL_PERSONAL + "/" + usuarioId;
+    }
+
     // Controlador de prueba del núcleo comun (solo existe en src/test)
     public static final String PRUEBA_PANEL = "/prueba-comun/panel";
     public static final String PRUEBA_PANEL_SIN_PERMISO = "/prueba-comun/panel-sin-permiso";

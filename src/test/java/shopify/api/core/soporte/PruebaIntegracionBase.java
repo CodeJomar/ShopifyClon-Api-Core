@@ -82,6 +82,12 @@ public abstract class PruebaIntegracionBase {
         return mvc.perform(conCabeceras(MockMvcRequestBuilders.get(ruta), jwt, tiendaId));
     }
 
+    protected ResultActions deleteJson(String ruta, Object cuerpo, String jwt, UUID tiendaId) throws Exception {
+        return mvc.perform(conCabeceras(MockMvcRequestBuilders.delete(ruta), jwt, tiendaId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(cuerpo)));
+    }
+
     protected ResultActions delete(String ruta, String jwt, UUID tiendaId) throws Exception {
         return mvc.perform(conCabeceras(MockMvcRequestBuilders.delete(ruta), jwt, tiendaId));
     }
