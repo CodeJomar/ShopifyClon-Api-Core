@@ -66,9 +66,6 @@ public class SecurityConfig {
                         // TEMPORAL: se elimina al reescribir pago (T-016)
                         .requestMatchers("/pagos/webhook/**").permitAll()
 
-                        // TEMPORAL: se elimina al reescribir tienda (T-005)
-                        .requestMatchers(HttpMethod.GET, "/tiendas/*").permitAll()
-
                         // Cualquier otra petición requiere autenticación por token JWT
                         .anyRequest().authenticated()
                 )

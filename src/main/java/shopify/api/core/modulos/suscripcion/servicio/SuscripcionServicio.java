@@ -37,34 +37,32 @@ public class SuscripcionServicio {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public SuscripcionVigente crearPrueba(UUID tiendaId, String codigoPlan) {
-        String codigo = codigoPlan == null || codigoPlan.isBlank()
-                ? CODIGO_PLAN_POR_DEFECTO
-                : codigoPlan.strip().toUpperCase(Locale.ROOT);
-
-        PlanSuscripcionEntidad plan = planes.findByCodigoAndEliminadoFalse(codigo)
-                .filter(p -> Boolean.TRUE.equals(p.getEsPublico()) && p.getDiasPrueba() >= 1)
-                .orElseThrow(() -> new ReglaNegocioException("SUS-015", "El plan elegido no está disponible"));
-
-        if (suscripciones.buscarNoCanceladaPorTienda(tiendaId).isPresent()) {
-            throw new ConflictoEstadoException("SUS-002", "La tienda ya tiene una suscripción vigente");
-        }
+        PlanSuscripcionEntidad plan = planPublico(codigoPlan, true);
+        exigirSinSuscripcion(tiendaId);
 
         Instant ahora = reloj.instant();
         Instant fin = ahora.plus(plan.getDiasPrueba(), ChronoUnit.DAYS);
 
-        SuscripcionTiendaEntidad suscripcion = new SuscripcionTiendaEntidad();
-        suscripcion.setTiendaId(tiendaId);
-        suscripcion.setPlanId(plan.getId());
-        suscripcion.setEstado(EstadoSuscripcion.PRUEBA);
-        suscripcion.setCicloFacturacion(CicloFacturacion.MENSUAL);
-        suscripcion.setPrecioPactado(plan.getPrecioMensual());
-        suscripcion.setMoneda(plan.getMoneda());
-        suscripcion.setFechaInicio(ahora);
+        SuscripcionTiendaEntidad suscripcion = nuevaSuscripcion(tiendaId, plan, EstadoSuscripcion.PRUEBA, ahora);
         suscripcion.setFechaFinPrueba(fin);
-        suscripcion.setInicioPeriodoActual(ahora);
         suscripcion.setFinPeriodoActual(fin);
-        suscripcion.setCancelarAlFinalizarPeriodo(false);
+        return aVigente(suscripciones.save(suscripcion), plan);
+    }
 
+    /**
+     * Crea la suscripción de una tienda cuyo propietario ya usó su prueba (SUS-016): nace {@code VENCIDA}
+     * con período vacío y no opera hasta que se pague. No exige {@code DiasPrueba >= 1} del plan.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public SuscripcionVigente crearPendienteDePago(UUID tiendaId, String codigoPlan) {
+        PlanSuscripcionEntidad plan = planPublico(codigoPlan, false);
+        exigirSinSuscripcion(tiendaId);
+
+        Instant ahora = reloj.instant();
+        SuscripcionTiendaEntidad suscripcion = nuevaSuscripcion(tiendaId, plan, EstadoSuscripcion.VENCIDA, ahora);
+        suscripcion.setFinPeriodoActual(ahora);
+        suscripcion.setFechaVencimiento(ahora);
+        suscripcion.setMotivoEstado("Prueba gratuita ya utilizada; requiere pago");
         return aVigente(suscripciones.save(suscripcion), plan);
     }
 
@@ -79,6 +77,37 @@ public class SuscripcionServicio {
         return suscripciones.buscarNoCanceladaPorTienda(tiendaId)
                 .flatMap(suscripcion -> planes.findById(suscripcion.getPlanId())
                         .map(plan -> aVigente(suscripcion, plan)));
+    }
+
+    private PlanSuscripcionEntidad planPublico(String codigoPlan, boolean exigirDiasPrueba) {
+        String codigo = codigoPlan == null || codigoPlan.isBlank()
+                ? CODIGO_PLAN_POR_DEFECTO
+                : codigoPlan.strip().toUpperCase(Locale.ROOT);
+
+        return planes.findByCodigoAndEliminadoFalse(codigo)
+                .filter(p -> Boolean.TRUE.equals(p.getEsPublico()) && (!exigirDiasPrueba || p.getDiasPrueba() >= 1))
+                .orElseThrow(() -> new ReglaNegocioException("SUS-015", "El plan elegido no está disponible"));
+    }
+
+    private void exigirSinSuscripcion(UUID tiendaId) {
+        if (suscripciones.buscarNoCanceladaPorTienda(tiendaId).isPresent()) {
+            throw new ConflictoEstadoException("SUS-002", "La tienda ya tiene una suscripción vigente");
+        }
+    }
+
+    private SuscripcionTiendaEntidad nuevaSuscripcion(UUID tiendaId, PlanSuscripcionEntidad plan,
+                                                      EstadoSuscripcion estado, Instant ahora) {
+        SuscripcionTiendaEntidad suscripcion = new SuscripcionTiendaEntidad();
+        suscripcion.setTiendaId(tiendaId);
+        suscripcion.setPlanId(plan.getId());
+        suscripcion.setEstado(estado);
+        suscripcion.setCicloFacturacion(CicloFacturacion.MENSUAL);
+        suscripcion.setPrecioPactado(plan.getPrecioMensual());
+        suscripcion.setMoneda(plan.getMoneda());
+        suscripcion.setFechaInicio(ahora);
+        suscripcion.setInicioPeriodoActual(ahora);
+        suscripcion.setCancelarAlFinalizarPeriodo(false);
+        return suscripcion;
     }
 
     private SuscripcionVigente aVigente(SuscripcionTiendaEntidad suscripcion, PlanSuscripcionEntidad plan) {
