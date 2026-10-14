@@ -19,6 +19,9 @@ public final class Rutas {
     public static final String CUENTA_CONTRASENA = "/cuenta/contrasena";
     public static final String CUENTA_DIRECCIONES = "/cuenta/direcciones";
 
+    // Planes de suscripción (públicos)
+    public static final String PLANES = "/planes";
+
     public static String cuentaDireccion(Object id) {
         return CUENTA_DIRECCIONES + "/" + id;
     }
