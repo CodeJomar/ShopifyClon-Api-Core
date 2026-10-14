@@ -22,7 +22,7 @@ class TarifaEnvioPanelTest extends PruebaEnvioBase {
     @BeforeEach
     void preparar() {
         propietario = nuevaSesion();
-        tienda = crearTienda(propietario.id());
+        tienda = crearTiendaOperativa(propietario.id());
     }
 
     private UUID crear(Map<String, Object> cuerpo) throws Exception {
@@ -101,7 +101,7 @@ class TarifaEnvioPanelTest extends PruebaEnvioBase {
     @Test
     void tarifaDeOtraTiendaEs404() throws Exception {
         UUID id = crear(tarifaJson("Propia", "5"));
-        UUID otra = crearTienda(propietario.id());
+        UUID otra = crearTiendaOperativa(propietario.id());
 
         putJson(Rutas.panelEnvioTarifa(id), tarifaJson("Robada", "1"), propietario.token(), otra)
                 .andExpect(status().isNotFound())
