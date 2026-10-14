@@ -1,0 +1,23 @@
+package shopify.api.core.comun.auditoria;
+
+/** Acciones sensibles que se registran en {@code RegistroAuditoria} (AUD-001). */
+public enum AccionAuditoria {
+    TIENDA_CREADA,
+    TIENDA_ACTIVADA,
+    TIENDA_DESACTIVADA,
+    TIENDA_SUSPENDIDA,
+    TIENDA_REACTIVADA,
+    PERSONAL_AGREGADO,
+    PERSONAL_ROL_CAMBIADO,
+    PERSONAL_QUITADO,
+    PLAN_CAMBIADO,
+    SUSCRIPCION_CANCELADA,
+    PLAN_PRECIO_CAMBIADO,
+    INVENTARIO_AJUSTADO,
+    ORDEN_CANCELADA,
+    ORDEN_CERRADA,
+    ORDEN_REABIERTA,
+    PAGO_MANUAL_REGISTRADO,
+    PAGO_TARDIO_RECIBIDO,
+    REEMBOLSO_EMITIDO
+}

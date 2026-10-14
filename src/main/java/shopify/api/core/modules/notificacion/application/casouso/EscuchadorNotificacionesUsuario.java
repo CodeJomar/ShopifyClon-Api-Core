@@ -3,11 +3,12 @@ package shopify.api.core.modules.notificacion.application.casouso;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.EventListener;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import shopify.api.core.comun.evento.CodigoRecuperacionGeneradoEvento;
 import shopify.api.core.comun.evento.UsuarioRegistradoEvento;
 
@@ -20,14 +21,8 @@ public class EscuchadorNotificacionesUsuario {
     private JavaMailSender mailSender;
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void alRegistrarUsuario(UsuarioRegistradoEvento evento) {
-        log.info("=================================================================");
-        log.info("📧 [NOTIFICACIÓN] Enviar enlace de activación a: {}", evento.getCorreoElectronico());
-        log.info("🔗 Token de activación: {}", evento.getTokenActivacion());
-        log.info("URL: http://localhost:8080/api/v1/usuarios/activar-cuenta?token={}", evento.getTokenActivacion());
-        log.info("=================================================================");
-
         if (mailSender != null) {
             try {
                 SimpleMailMessage mensaje = new SimpleMailMessage();
@@ -36,20 +31,16 @@ public class EscuchadorNotificacionesUsuario {
                 mensaje.setText("Hola " + evento.getNombres() + ",\n\nActiva tu cuenta con este enlace:\n"
                         + "http://localhost:8080/api/v1/usuarios/activar-cuenta?token=" + evento.getTokenActivacion());
                 mailSender.send(mensaje);
+                log.info("Correo de activación enviado a {}", evento.getCorreoElectronico());
             } catch (Exception e) {
-                log.error("Fallo al enviar correo real: {}", e.getMessage());
+                log.error("Fallo al enviar correo a {}: {}", evento.getCorreoElectronico(), e.getMessage());
             }
         }
     }
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void alSolicitarRecuperacion(CodigoRecuperacionGeneradoEvento evento) {
-        log.info("=================================================================");
-        log.info("🔑 [NOTIFICACIÓN] Código OTP de recuperación para: {}", evento.getCorreoElectronico());
-        log.info("🔢 CÓDIGO DE VERIFICACIÓN (Válido 15 min): {}", evento.getCodigoOtp());
-        log.info("=================================================================");
-
         if (mailSender != null) {
             try {
                 SimpleMailMessage mensaje = new SimpleMailMessage();
@@ -57,8 +48,9 @@ public class EscuchadorNotificacionesUsuario {
                 mensaje.setSubject("Código de recuperación de contraseña");
                 mensaje.setText("Hola " + evento.getNombres() + ",\n\nTu código de recuperación es: " + evento.getCodigoOtp());
                 mailSender.send(mensaje);
+                log.info("Correo de recuperación enviado a {}", evento.getCorreoElectronico());
             } catch (Exception e) {
-                log.error("Fallo al enviar correo real: {}", e.getMessage());
+                log.error("Fallo al enviar correo a {}: {}", evento.getCorreoElectronico(), e.getMessage());
             }
         }
     }
