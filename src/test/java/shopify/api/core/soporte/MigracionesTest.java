@@ -36,9 +36,11 @@ class MigracionesTest extends PruebaIntegracionBase {
 
     @Test
     void v3RetiraLosRolesClienteYAdminTienda() {
-        List<Boolean> eliminados = jdbc.queryForList(
-                "SELECT \"Eliminado\" FROM \"Roles\" WHERE \"Codigo\" IN ('CLIENTE', 'ADMIN_TIENDA')", Boolean.class);
-        assertThat(eliminados).isNotEmpty().allMatch(Boolean::booleanValue);
+        // En una base limpia esos roles no existen; en Supabase existían. En ambos casos no debe quedar ninguno activo.
+        Integer activos = jdbc.queryForObject(
+                "SELECT count(*) FROM \"Roles\" WHERE \"Codigo\" IN ('CLIENTE', 'ADMIN_TIENDA') AND \"Eliminado\" = FALSE",
+                Integer.class);
+        assertThat(activos).isZero();
     }
 
     @Test
