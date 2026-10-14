@@ -65,6 +65,19 @@ public final class Rutas {
         return vitrina(subdominio) + "/tarifas-envio";
     }
 
+    // Suscripción (propietario) y administración de la plataforma
+    public static final String PANEL_SUSCRIPCION = "/panel/suscripcion";
+    public static final String PLATAFORMA_PLANES = "/plataforma/planes";
+    public static final String PLATAFORMA_SUSCRIPCIONES = "/plataforma/suscripciones";
+
+    public static String plataformaPlan(String codigo) {
+        return PLATAFORMA_PLANES + "/" + codigo;
+    }
+
+    public static String plataformaTienda(Object tiendaId, String accion) {
+        return "/plataforma/tiendas/" + tiendaId + "/" + accion;
+    }
+
     // Controlador de prueba del núcleo comun (solo existe en src/test)
     public static final String PRUEBA_PANEL = "/prueba-comun/panel";
     public static final String PRUEBA_PANEL_SIN_PERMISO = "/prueba-comun/panel-sin-permiso";

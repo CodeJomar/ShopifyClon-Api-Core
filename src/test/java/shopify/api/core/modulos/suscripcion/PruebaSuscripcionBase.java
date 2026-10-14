@@ -31,6 +31,11 @@ abstract class PruebaSuscripcionBase extends PruebaIntegracionBase {
         planesDePrueba.add(codigo);
     }
 
+    /** Para planes creados por la API: se borran al final de la prueba, igual que los insertados. */
+    protected void recordarPlan(String codigo) {
+        planesDePrueba.add(codigo);
+    }
+
     protected String codigoPlanUnico() {
         return "P" + sufijo().toUpperCase();
     }
