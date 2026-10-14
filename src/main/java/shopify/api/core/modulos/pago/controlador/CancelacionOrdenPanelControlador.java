@@ -26,12 +26,14 @@ public class CancelacionOrdenPanelControlador {
 
     private final CancelacionOrdenServicio cancelacion;
 
-    @Operation(summary = "Cancelar una orden no pagada (libera stock y devuelve el cupón)")
+    @Operation(summary = "Cancelar una orden (sin pago: libera stock; pagada: reembolso total y cancelación)")
     @PostMapping
     @RequierePermiso(Permiso.ORDENES_CANCELAR)
     public ResponseEntity<RespuestaApi<Void>> cancelar(ContextoTienda contexto, @PathVariable UUID ordenId,
                                                        @Valid @RequestBody CancelarOrdenRequest request) {
-        cancelacion.cancelarPorPersonal(contexto.tiendaId(), ordenId, request.motivo(), request.detalle());
+        boolean reponerStock = request.reponerStock() == null || request.reponerStock();
+        cancelacion.cancelarPorPersonal(contexto.tiendaId(), ordenId, request.motivo(), request.detalle(), reponerStock,
+                contexto.tiene(Permiso.REEMBOLSOS_EMITIR));
         return RespuestaApi.ok(null, "Orden cancelada");
     }
 }

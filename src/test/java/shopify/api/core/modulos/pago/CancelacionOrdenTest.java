@@ -63,14 +63,15 @@ class CancelacionOrdenTest extends PruebaIntegracionBase {
     }
 
     @Test
-    void cancelarUnaOrdenPagadaEsORD007() throws Exception {
+    void cancelarUnaOrdenPagadaSinPermisoDeReembolsoEs403SEG002() throws Exception {
+        // T-019: una orden pagada se cancela reembolsando; sin REEMBOLSOS_EMITIR (GESTOR_PEDIDOS) responde 403 SEG-002
         UUID variante = variante(new BigDecimal("50.00"));
         UUID orden = comprar(variante, 1, null, "50.00");
         jdbc.update("UPDATE \"Ordenes\" SET \"EstadoPago\" = 'PAGADO' WHERE \"Id\" = ?", orden);
 
         cancelar(orden, "CLIENTE", null, gestorJwt)
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.codigo").value("ORD-007"));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("SEG-002"));
         assertThat(estados(orden)).containsExactly("ABIERTA", "PAGADO", "NO_PREPARADO");
         assertThat(reservada(variante)).isEqualTo(1);
     }
