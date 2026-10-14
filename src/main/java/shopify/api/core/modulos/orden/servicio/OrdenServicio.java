@@ -1,5 +1,6 @@
 package shopify.api.core.modulos.orden.servicio;
 
+import java.util.Locale;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +36,7 @@ public class OrdenServicio {
         orden.setTiendaId(datos.tiendaId());
         orden.setUsuarioId(datos.usuarioId());
         orden.setNumeroOrden(datos.numeroOrden());
-        orden.setCorreoCliente(datos.correoCliente());
+        orden.setCorreoCliente(datos.correoCliente().trim().toLowerCase(Locale.ROOT));
         orden.setNombreCliente(datos.nombreCliente());
         orden.setTelefonoCliente(datos.telefonoCliente());
         orden.setSubtotal(datos.subtotal());
