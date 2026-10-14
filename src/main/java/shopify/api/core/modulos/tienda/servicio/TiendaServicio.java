@@ -111,6 +111,15 @@ public class TiendaServicio {
                 .orElseThrow(() -> new RecursoNoEncontradoException("TIE-404", MENSAJE_TIENDA_NO_DISPONIBLE));
     }
 
+    /** Id de la tienda del subdominio si es operativa (TIE-004); vacío si no existe o no lo es. */
+    @Transactional(readOnly = true)
+    public Optional<UUID> idOperativaPorSubdominio(String subdominio) {
+        String clave = subdominio == null ? "" : subdominio.trim().toLowerCase(Locale.ROOT);
+        return tiendaRepositorio.findBySubdominioAndEliminadoFalse(clave)
+                .filter(tienda -> Boolean.TRUE.equals(tienda.getEstaActiva()) && suscripcionOperativa(tienda.getId()))
+                .map(TiendaEntidad::getId);
+    }
+
     private TiendaConfiguracionResponse cambiarEstado(ContextoTienda contexto, boolean activa, String motivo,
                                                       AccionAuditoria accion) {
         if (!contexto.esPropietario()) {
