@@ -6,8 +6,10 @@ import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.StripeObject;
 import com.stripe.net.RequestOptions;
+import com.stripe.model.Refund;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
+import com.stripe.param.RefundCreateParams;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,6 +61,24 @@ public class StripePasarela implements PasarelaEnLinea {
             return new IntentoPago(intento.getId(), intento.getClientSecret(), intento.getStatus());
         } catch (StripeException ex) {
             throw new ConflictoEstadoException("PAG-002", "No pudimos recuperar el pago en línea. Intenta de nuevo");
+        }
+    }
+
+    /**
+     * Reembolso por el monto exacto en centavos. Solo {@code succeeded} cuenta como aprobado; un estado pendiente o
+     * cualquier fallo de red se devuelve como no aprobado, y el servicio lo registra como RECHAZADO (PAG-007).
+     */
+    @Override
+    public ResultadoReembolso reembolsar(String intentoId, long montoCentavos) {
+        exigirClave();
+        try {
+            Refund reembolso = Refund.create(RefundCreateParams.builder()
+                    .setPaymentIntent(intentoId)
+                    .setAmount(montoCentavos)
+                    .build(), opciones());
+            return new ResultadoReembolso(reembolso.getId(), "succeeded".equals(reembolso.getStatus()));
+        } catch (StripeException ex) {
+            return new ResultadoReembolso(null, false);
         }
     }
 

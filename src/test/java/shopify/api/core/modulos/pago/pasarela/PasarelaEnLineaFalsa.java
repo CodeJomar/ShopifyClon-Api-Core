@@ -45,6 +45,13 @@ public class PasarelaEnLineaFalsa implements PasarelaEnLinea {
         return new IntentoPago(intentoId, "pi_test_secret_" + intentoId, "requires_payment_method");
     }
 
+    /** Simula el rechazo con montos cuyos centavos terminan en 13 (p. ej. 10.13); el resto se aprueba. */
+    @Override
+    public ResultadoReembolso reembolsar(String intentoId, long montoCentavos) {
+        boolean rechazado = montoCentavos % 100 == 13;
+        return new ResultadoReembolso("re_test_" + UUID.randomUUID().toString().replace("-", ""), !rechazado);
+    }
+
     @Override
     public EventoPasarela verificarWebhook(String cuerpo, String firma) {
         if (firma == null || !firma.equals(firmar(cuerpo))) {
