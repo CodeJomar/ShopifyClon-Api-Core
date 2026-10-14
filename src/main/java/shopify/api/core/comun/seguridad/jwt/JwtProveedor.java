@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +44,13 @@ public class JwtProveedor {
                 .expiration(fechaExpiracion)
                 .signWith(this.claveFirma)
                 .compact();
+    }
+
+    /**
+     * Instante en que vence un token emitido en {@code emitido}.
+     */
+    public Instant calcularExpiracion(Instant emitido) {
+        return emitido.plusMillis(this.tiempoExpiracionMs);
     }
 
     /**
