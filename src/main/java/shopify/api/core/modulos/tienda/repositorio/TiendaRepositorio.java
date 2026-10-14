@@ -64,4 +64,15 @@ public interface TiendaRepositorio extends JpaRepository<TiendaEntidad, UUID> {
             )
             """, nativeQuery = true)
     boolean estaVencidaDesde(@Param("tiendaId") UUID tiendaId, @Param("limite") Instant limite);
+
+    /**
+     * Paso 8 del checkout: toma el número siguiente y bloquea la fila de la tienda hasta el commit. Devuelve el
+     * número tomado (la primera orden de una tienda nueva es 1001). Sin fila, devuelve vacío.
+     */
+    @Query(value = """
+            UPDATE "Tiendas" SET "SiguienteNumeroOrden" = "SiguienteNumeroOrden" + 1
+            WHERE "Id" = :tiendaId AND "Eliminado" = FALSE
+            RETURNING "SiguienteNumeroOrden" - 1
+            """, nativeQuery = true)
+    Optional<Integer> tomarNumeroOrden(@Param("tiendaId") UUID tiendaId);
 }

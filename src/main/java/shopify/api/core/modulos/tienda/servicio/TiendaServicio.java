@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.comun.auditoria.AccionAuditoria;
 import shopify.api.core.comun.auditoria.AuditoriaServicio;
@@ -118,6 +119,27 @@ public class TiendaServicio {
         TiendaEntidad tienda = tiendaRepositorio.findByIdAndEliminadoFalse(tiendaId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("TIE-404", MENSAJE_TIENDA_NO_DISPONIBLE));
         return new ConfiguracionVenta(tienda.getMoneda(), tienda.getTasaImpuesto(), tienda.getPreciosIncluyenImpuesto());
+    }
+
+    /**
+     * Id de la tienda del subdominio sin mirar si es operativa; vacío si no existe. Solo lo usa el checkout, que
+     * necesita distinguir una tienda desactivada (CHK-001) de una que no existe (TIE-404).
+     */
+    @Transactional(readOnly = true)
+    public Optional<UUID> idPorSubdominio(String subdominio) {
+        String clave = subdominio == null ? "" : subdominio.trim().toLowerCase(Locale.ROOT);
+        return tiendaRepositorio.findBySubdominioAndEliminadoFalse(clave).map(TiendaEntidad::getId);
+    }
+
+    /**
+     * Paso 8 del checkout: número correlativo de la orden ("#1001" para la primera). Bloquea la tienda hasta el
+     * commit de la transacción de quien llama, así que debe ejecutarse dentro de ella (MANDATORY).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public String tomarNumeroOrden(UUID tiendaId) {
+        Integer numero = tiendaRepositorio.tomarNumeroOrden(tiendaId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("TIE-404", MENSAJE_TIENDA_NO_DISPONIBLE));
+        return "#" + numero;
     }
 
     /** Id de la tienda del subdominio si es operativa (TIE-004); vacío si no existe o no lo es. */
