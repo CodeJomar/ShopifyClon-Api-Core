@@ -6,6 +6,7 @@ import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -24,6 +25,14 @@ import shopify.api.core.comun.dto.RespuestaApi;
 @Slf4j
 @RestControllerAdvice
 public class ManejadorExcepcionesGlobal {
+
+    @ExceptionHandler(DemasiadasPeticionesException.class)
+    public ResponseEntity<RespuestaApi<Void>> manejarLimite(DemasiadasPeticionesException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.getEstado())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getSegundosRestantes()))
+                .body(RespuestaApi.cuerpoError(ex.getEstado(), ex.getCodigo(), ex.getMessage(),
+                        request.getRequestURI(), null, ex.getDetalles()));
+    }
 
     @ExceptionHandler(ExcepcionNegocio.class)
     public ResponseEntity<RespuestaApi<Void>> manejarNegocio(ExcepcionNegocio ex, HttpServletRequest request) {

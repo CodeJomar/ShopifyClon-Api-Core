@@ -8,16 +8,19 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import shopify.api.core.comun.seguridad.ContextoTiendaInterceptor;
 import shopify.api.core.comun.seguridad.ContextoTiendaResolver;
+import shopify.api.core.comun.seguridad.LimitePeticionesInterceptor;
 
 @Configuration
 @RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
 
+    private final LimitePeticionesInterceptor limitePeticionesInterceptor;
     private final ContextoTiendaInterceptor contextoTiendaInterceptor;
     private final ContextoTiendaResolver contextoTiendaResolver;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(this.limitePeticionesInterceptor).addPathPatterns("/**");
         registry.addInterceptor(this.contextoTiendaInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(
