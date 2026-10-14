@@ -84,6 +84,17 @@ public final class Rutas {
         return vitrina(subdominio) + "/tarifas-envio";
     }
 
+    // Órdenes y pagos del panel
+    public static final String PANEL_ORDENES = "/panel/ordenes";
+
+    public static String panelOrdenPagos(Object ordenId) {
+        return PANEL_ORDENES + "/" + ordenId + "/pagos";
+    }
+
+    public static String panelOrdenPagosManual(Object ordenId) {
+        return panelOrdenPagos(ordenId) + "/manual";
+    }
+
     public static String vitrinaCarrito(String subdominio) {
         return vitrina(subdominio) + "/carrito";
     }
