@@ -223,6 +223,17 @@
 				</configuration>
 			</plugin>
 
+			<!-- Docker Engine 29+ rechaza la API 1.32 que usa por defecto Testcontainers 1.19 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<api.version>1.44</api.version>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>

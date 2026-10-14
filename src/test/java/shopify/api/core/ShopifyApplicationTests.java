@@ -1,10 +1,9 @@
 package shopify.api.core;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
+import shopify.api.core.soporte.PruebaIntegracionBase;
 
-@SpringBootTest
-class ShopifyApplicationTests {
+class ShopifyApplicationTests extends PruebaIntegracionBase {
 
 	@Test
 	void contextLoads() {
