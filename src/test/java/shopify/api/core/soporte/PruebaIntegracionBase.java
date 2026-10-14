@@ -11,6 +11,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
+import shopify.api.core.comun.seguridad.jwt.JwtProveedor;
+import java.util.Map;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -56,6 +58,9 @@ public abstract class PruebaIntegracionBase {
     @Autowired
     protected JdbcTemplate jdbc;
 
+    @Autowired
+    protected JwtProveedor jwtProveedor;
+
     /** Texto único por llamada para correos, subdominios y nombres de prueba. */
     protected String sufijo() {
         return Long.toString(System.nanoTime(), 36) + CONTADOR.incrementAndGet();
@@ -79,6 +84,47 @@ public abstract class PruebaIntegracionBase {
 
     protected ResultActions delete(String ruta, String jwt, UUID tiendaId) throws Exception {
         return mvc.perform(conCabeceras(MockMvcRequestBuilders.delete(ruta), jwt, tiendaId));
+    }
+
+    // ---- Datos de prueba directos en la base (no dependen de ningún módulo) ----
+
+    protected UUID crearUsuarioActivo(boolean adminPlataforma) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO \"Usuarios\" (\"Id\", \"CorreoElectronico\", \"ContrasenaHash\", \"Nombres\", "
+                + "\"Apellidos\", \"EsAdministradorPlataforma\") VALUES (?, ?, 'hash-de-prueba', 'Prueba', 'Usuario', ?)",
+                id, "u-" + sufijo() + "@prueba.test", adminPlataforma);
+        return id;
+    }
+
+    protected void inactivarUsuario(UUID usuarioId) {
+        jdbc.update("UPDATE \"Usuarios\" SET \"EstaActivo\" = FALSE WHERE \"Id\" = ?", usuarioId);
+    }
+
+    protected UUID crearTienda(UUID propietarioId) {
+        UUID id = UUID.randomUUID();
+        String sufijo = sufijo();
+        jdbc.update("INSERT INTO \"Tiendas\" (\"Id\", \"PropietarioId\", \"Nombre\", \"Subdominio\", \"CorreoContacto\") "
+                + "VALUES (?, ?, ?, ?, ?)", id, propietarioId, "Tienda " + sufijo, "t-" + sufijo, "t-" + sufijo + "@prueba.test");
+        return id;
+    }
+
+    protected void agregarPersonal(UUID tiendaId, UUID usuarioId, String codigoRol) {
+        jdbc.update("INSERT INTO \"Roles\" (\"Nombre\", \"Codigo\") VALUES (?, ?) ON CONFLICT (\"Codigo\") DO NOTHING",
+                codigoRol, codigoRol);
+        jdbc.update("INSERT INTO \"PersonalTienda\" (\"TiendaId\", \"UsuarioId\", \"RolId\") "
+                + "SELECT ?, ?, \"Id\" FROM \"Roles\" WHERE \"Codigo\" = ?", tiendaId, usuarioId, codigoRol);
+    }
+
+    protected void eliminarTienda(UUID tiendaId) {
+        jdbc.update("UPDATE \"Tiendas\" SET \"Eliminado\" = TRUE WHERE \"Id\" = ?", tiendaId);
+    }
+
+    protected String tokenPara(UUID usuarioId, String correo) {
+        return jwtProveedor.generarToken(usuarioId, correo, Map.of());
+    }
+
+    protected com.fasterxml.jackson.databind.JsonNode cuerpo(ResultActions resultado) throws Exception {
+        return json.readTree(resultado.andReturn().getResponse().getContentAsString());
     }
 
     private MockHttpServletRequestBuilder conCabeceras(MockHttpServletRequestBuilder peticion, String jwt, UUID tiendaId) {

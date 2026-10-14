@@ -13,7 +13,7 @@ class PruebaEjemploHttpTest extends PruebaIntegracionBase {
     void registroCreaUnUsuario() throws Exception {
         String correo = "ejemplo-" + sufijo() + "@prueba.test";
 
-        postJson("/usuarios/registro", Map.of(
+        postJson(Rutas.USUARIOS_REGISTRO, Map.of(
                 "correo_electronico", correo,
                 "contrasena", "Clave12345!",
                 "nombres", "Ana",
