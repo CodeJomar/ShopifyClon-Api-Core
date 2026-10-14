@@ -1,6 +1,8 @@
 package shopify.api.core.modulos.suscripcion.repositorio;
 
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -80,4 +82,24 @@ public interface SuscripcionTiendaRepositorio extends JpaRepository<SuscripcionT
             """,
             nativeQuery = true)
     Page<SuscripcionPlataformaVista> buscarParaPlataforma(@Param("estado") String estado, Pageable pagina);
+
+    /**
+     * Candidatas del programador (SUS-005, SUS-006): de prueba o activas con el período vencido, en lotes
+     * por {@code Id} para que una misma suscripción no se revise dos veces en una ejecución.
+     */
+    @Query(value = """
+            SELECT "Id" FROM "SuscripcionesTienda"
+            WHERE "Eliminado" = FALSE AND "Estado" IN ('PRUEBA', 'ACTIVA')
+              AND "FinPeriodoActual" <= :ahora AND "Id" > :ultimo
+            ORDER BY "Id"
+            LIMIT :limite
+            """, nativeQuery = true)
+    List<UUID> candidatasVencidas(@Param("ahora") Instant ahora, @Param("ultimo") UUID ultimo,
+                                  @Param("limite") int limite);
+
+    /**
+     * Bloquea la fila sin esperar: si otra instancia la tiene, vuelve vacío y se omite (FOR UPDATE SKIP LOCKED).
+     */
+    @Query(value = "SELECT * FROM \"SuscripcionesTienda\" WHERE \"Id\" = :id FOR UPDATE SKIP LOCKED", nativeQuery = true)
+    Optional<SuscripcionTiendaEntidad> bloquearPorIdSinEsperar(@Param("id") UUID id);
 }

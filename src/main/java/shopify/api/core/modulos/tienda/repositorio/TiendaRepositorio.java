@@ -1,6 +1,7 @@
 package shopify.api.core.modulos.tienda.repositorio;
 
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,4 +42,26 @@ public interface TiendaRepositorio extends JpaRepository<TiendaEntidad, UUID> {
             ORDER BY t."Nombre"
             """, nativeQuery = true)
     List<MiTiendaVista> listarDeUsuario(@Param("usuarioId") UUID usuarioId);
+
+    /**
+     * SUS-007: tiendas activas cuya suscripción no cancelada lleva VENCIDA desde antes de {@code limite}.
+     * Lectura de la tabla de suscripciones con JOIN; el módulo suscripción no se importa desde tienda.
+     */
+    @Query(value = """
+            SELECT DISTINCT t."Id" FROM "Tiendas" t
+            JOIN "SuscripcionesTienda" s ON s."TiendaId" = t."Id"
+            WHERE t."EstaActiva" = TRUE AND t."Eliminado" = FALSE
+              AND s."Eliminado" = FALSE AND s."Estado" = 'VENCIDA' AND s."FechaVencimiento" <= :limite
+            """, nativeQuery = true)
+    List<UUID> tiendasVencidasDesde(@Param("limite") Instant limite);
+
+    /** Comprobación dentro de la transacción, con la tienda ya bloqueada (SUS-007). */
+    @Query(value = """
+            SELECT EXISTS (
+              SELECT 1 FROM "SuscripcionesTienda" s
+              WHERE s."TiendaId" = :tiendaId AND s."Estado" = 'VENCIDA'
+                AND s."Eliminado" = FALSE AND s."FechaVencimiento" <= :limite
+            )
+            """, nativeQuery = true)
+    boolean estaVencidaDesde(@Param("tiendaId") UUID tiendaId, @Param("limite") Instant limite);
 }
