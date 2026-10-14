@@ -47,6 +47,13 @@ public final class Rutas {
         return PANEL_PERSONAL + "/" + usuarioId;
     }
 
+    // Cupones del panel
+    public static final String PANEL_CUPONES = "/panel/cupones";
+
+    public static String panelCupon(Object id) {
+        return PANEL_CUPONES + "/" + id;
+    }
+
     // Controlador de prueba del núcleo comun (solo existe en src/test)
     public static final String PRUEBA_PANEL = "/prueba-comun/panel";
     public static final String PRUEBA_PANEL_SIN_PERMISO = "/prueba-comun/panel-sin-permiso";
