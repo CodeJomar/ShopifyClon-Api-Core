@@ -84,6 +84,9 @@ public final class Rutas {
         return vitrina(subdominio) + "/tarifas-envio";
     }
 
+    // Métricas del panel
+    public static final String PANEL_METRICAS_PATH = "/panel/metricas";
+
     // Órdenes y pagos del panel
     public static final String PANEL_ORDENES = "/panel/ordenes";
 
