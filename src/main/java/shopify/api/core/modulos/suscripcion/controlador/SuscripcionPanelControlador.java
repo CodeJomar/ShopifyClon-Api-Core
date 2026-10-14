@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.comun.seguridad.ContextoTienda;
+import shopify.api.core.comun.seguridad.PermitidoSinSuscripcion;
 import shopify.api.core.comun.seguridad.Permiso;
 import shopify.api.core.comun.seguridad.RequierePermiso;
 import shopify.api.core.modulos.suscripcion.dto.request.CambiarPlanSuscripcionRequest;
@@ -20,6 +21,7 @@ import shopify.api.core.modulos.suscripcion.dto.request.PagarSuscripcionRequest;
 import shopify.api.core.modulos.suscripcion.dto.response.SuscripcionPanelResponse;
 import shopify.api.core.modulos.suscripcion.servicio.SuscripcionPanelServicio;
 
+@PermitidoSinSuscripcion
 @Tag(name = "Panel: suscripción", description = "Suscripción de la tienda, solo propietario (requiere X-Tienda-Id)")
 @RestController
 @RequestMapping("/panel/suscripcion")

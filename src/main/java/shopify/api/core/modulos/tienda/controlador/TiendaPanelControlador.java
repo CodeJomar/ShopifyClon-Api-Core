@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.comun.seguridad.ContextoTienda;
+import shopify.api.core.comun.seguridad.PermitidoSinSuscripcion;
 import shopify.api.core.comun.seguridad.Permiso;
 import shopify.api.core.comun.seguridad.RequierePermiso;
 import shopify.api.core.modulos.tienda.dto.request.ActualizarTiendaRequest;
@@ -44,6 +45,7 @@ public class TiendaPanelControlador {
 
     @Operation(summary = "Activar la tienda (solo el propietario)")
     @PostMapping("/activar")
+    @PermitidoSinSuscripcion
     public ResponseEntity<RespuestaApi<TiendaConfiguracionResponse>> activar(
             ContextoTienda contexto, @Valid @RequestBody(required = false) CambioEstadoTiendaRequest request) {
         return RespuestaApi.ok(tiendaServicio.activar(contexto, motivo(request)), "Tienda activada");
@@ -51,6 +53,7 @@ public class TiendaPanelControlador {
 
     @Operation(summary = "Desactivar la tienda (solo el propietario)")
     @PostMapping("/desactivar")
+    @PermitidoSinSuscripcion
     public ResponseEntity<RespuestaApi<TiendaConfiguracionResponse>> desactivar(
             ContextoTienda contexto, @Valid @RequestBody(required = false) CambioEstadoTiendaRequest request) {
         return RespuestaApi.ok(tiendaServicio.desactivar(contexto, motivo(request)), "Tienda desactivada");

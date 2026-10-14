@@ -52,7 +52,7 @@ public class CobroSuscripcionServicio {
         Pendiente pendiente = transaccion.execute(estado -> registrarPendiente(tiendaId, plan, ciclo, operacion));
         ResultadoCobro resultado = cobrarEnPasarela(pendiente, tokenPago);
         ResultadoAplicacion aplicacion = transaccion.execute(
-                estado -> aplicar(pendiente, resultado, plan, ciclo, operacion, tiendaId));
+                estado -> aplicar(pendiente, resultado, plan, ciclo, operacion, tiendaId, tokenPago));
 
         if (aplicacion == ResultadoAplicacion.RECHAZADO) {
             throw new ReglaNegocioException("SUS-004", "El pago fue rechazado");
@@ -125,7 +125,8 @@ public class CobroSuscripcionServicio {
 
     /** T2: registra el resultado y, si fue aprobado, aplica el período nuevo (SUS-003, SUS-004, SUS-008). */
     private ResultadoAplicacion aplicar(Pendiente pendiente, ResultadoCobro resultado, PlanSuscripcionEntidad plan,
-                                        CicloFacturacion ciclo, OperacionCobro operacion, UUID tiendaId) {
+                                        CicloFacturacion ciclo, OperacionCobro operacion, UUID tiendaId,
+                                        String tokenPago) {
         CobroSuscripcionEntidad cobro = cobros.findById(pendiente.cobroId())
                 .orElseThrow(() -> new RecursoNoEncontradoException("SUS-404", "No encontramos ese cobro"));
         SuscripcionTiendaEntidad suscripcion = suscripciones.bloquearPorId(pendiente.suscripcionId())
@@ -155,6 +156,8 @@ public class CobroSuscripcionServicio {
         suscripcion.setFinPeriodoActual(PreciosPlan.finDePeriodo(ahora, ciclo));
         suscripcion.setFechaVencimiento(null);
         suscripcion.setMotivoEstado(null);
+        // SUS-018: el token (nunca datos de tarjeta) queda para la renovación automática
+        suscripcion.setReferenciaPasarela(tokenPago);
         suscripciones.save(suscripcion);
 
         if (operacion == OperacionCobro.CAMBIO_PLAN) {
@@ -182,6 +185,116 @@ public class CobroSuscripcionServicio {
         suscripcion.setCancelarAlFinalizarPeriodo(false);
         suscripcion.setMotivoEstado("Pendiente de pago");
         return suscripcion;
+    }
+
+    /**
+     * Renovación automática (SUS-005, SUS-018): cobra el período siguiente con el token guardado y el precio
+     * vigente del plan (SUS-003). El período nuevo empieza donde terminó el anterior. Si otra instancia tiene la
+     * fila bloqueada, o ya hay un cobro en curso, se omite sin cobrar.
+     */
+    public ResultadoRenovacion renovar(UUID suscripcionId) {
+        Instant ahora = reloj.instant();
+        Optional<PendienteRenovacion> pendiente = transaccion.execute(estado -> registrarRenovacion(suscripcionId, ahora));
+        if (pendiente.isEmpty()) {
+            return new ResultadoRenovacion(ResultadoRenovacion.Estado.OMITIDA, null);
+        }
+
+        PendienteRenovacion p = pendiente.get();
+        ResultadoCobro resultado = cobrarRenovacionEnPasarela(p);
+        return transaccion.execute(estado -> aplicarRenovacion(p, resultado, ahora));
+    }
+
+    /** Fuera de transacción; un error de la pasarela cuenta como rechazo, igual que en {@link #cobrarEnPasarela}. */
+    private ResultadoCobro cobrarRenovacionEnPasarela(PendienteRenovacion p) {
+        try {
+            return pasarela.cobrar(p.suscripcionId(), p.monto(), p.moneda(), p.token());
+        } catch (RuntimeException ex) {
+            return new ResultadoCobro(false, null);
+        }
+    }
+
+    /** T1 de la renovación: bloquea sin esperar y deja el cobro {@code PENDIENTE} del período siguiente. */
+    private Optional<PendienteRenovacion> registrarRenovacion(UUID suscripcionId, Instant ahora) {
+        Optional<SuscripcionTiendaEntidad> bloqueada = suscripciones.bloquearPorIdSinEsperar(suscripcionId);
+        if (bloqueada.isEmpty()) {
+            return Optional.empty();
+        }
+        SuscripcionTiendaEntidad suscripcion = bloqueada.get();
+        boolean renovable = suscripcion.getEstado() == EstadoSuscripcion.ACTIVA
+                && !suscripcion.getFinPeriodoActual().isAfter(ahora)
+                && !Boolean.TRUE.equals(suscripcion.getCancelarAlFinalizarPeriodo())
+                && suscripcion.getReferenciaPasarela() != null && !suscripcion.getReferenciaPasarela().isBlank();
+        if (!renovable || cobros.existsBySuscripcionIdAndEstado(suscripcion.getId(), EstadoCobro.PENDIENTE)) {
+            return Optional.empty();
+        }
+
+        PlanSuscripcionEntidad plan = planes.findById(suscripcion.getPlanId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("SUS-404", "No encontramos el plan de la suscripción"));
+        BigDecimal monto = PreciosPlan.precioPara(plan, suscripcion.getCicloFacturacion());
+        Instant inicio = suscripcion.getFinPeriodoActual();
+        Instant fin = PreciosPlan.finDePeriodo(inicio, suscripcion.getCicloFacturacion());
+
+        CobroSuscripcionEntidad cobro = new CobroSuscripcionEntidad();
+        cobro.setSuscripcionId(suscripcion.getId());
+        cobro.setPlanId(plan.getId());
+        cobro.setMonto(monto);
+        cobro.setMoneda(plan.getMoneda());
+        cobro.setInicioPeriodo(inicio);
+        cobro.setFinPeriodo(fin);
+        cobro.setEstado(EstadoCobro.PENDIENTE);
+        cobro.setPasarelaPago(PASARELA_SIMULADA);
+        cobro.setIntento(1);
+        cobro = cobros.saveAndFlush(cobro);
+
+        return Optional.of(new PendienteRenovacion(suscripcion.getId(), suscripcion.getTiendaId(), cobro.getId(),
+                monto, plan.getMoneda(), suscripcion.getReferenciaPasarela(), inicio, fin, suscripcion.getCicloFacturacion()));
+    }
+
+    /** T2 de la renovación: aprobado abre el período; rechazado lleva la suscripción a VENCIDA (SUS-005). */
+    private ResultadoRenovacion aplicarRenovacion(PendienteRenovacion p, ResultadoCobro resultado, Instant ahora) {
+        CobroSuscripcionEntidad cobro = cobros.findById(p.cobroId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("SUS-404", "No encontramos ese cobro"));
+        SuscripcionTiendaEntidad suscripcion = suscripciones.bloquearPorId(p.suscripcionId())
+                .orElseThrow(() -> new RecursoNoEncontradoException("SUS-404", "La tienda no tiene una suscripción"));
+
+        cobro.setTransaccionId(resultado.transaccionId());
+        cobro.setDetallesRespuesta(Map.<String, Object>of("aprobado", resultado.aprobado(), "renovacion", true));
+
+        if (suscripcion.getEstado() != EstadoSuscripcion.ACTIVA) {
+            cobro.setEstado(EstadoCobro.RECHAZADO);
+            return new ResultadoRenovacion(ResultadoRenovacion.Estado.OMITIDA, p.tiendaId());
+        }
+        if (!resultado.aprobado()) {
+            cobro.setEstado(EstadoCobro.RECHAZADO);
+            suscripcion.setEstado(EstadoSuscripcion.VENCIDA);
+            suscripcion.setFechaVencimiento(ahora);
+            suscripcion.setMotivoEstado("Cobro de renovación rechazado");
+            suscripciones.save(suscripcion);
+            return new ResultadoRenovacion(ResultadoRenovacion.Estado.VENCIDA, p.tiendaId());
+        }
+
+        cobro.setEstado(EstadoCobro.APROBADO);
+        suscripcion.setInicioPeriodoActual(p.inicio());
+        suscripcion.setFinPeriodoActual(p.fin());
+        suscripcion.setCicloFacturacion(p.ciclo());
+        suscripcion.setPrecioPactado(p.monto());
+        suscripcion.setMoneda(p.moneda());
+        suscripciones.save(suscripcion);
+        return new ResultadoRenovacion(ResultadoRenovacion.Estado.RENOVADA, p.tiendaId());
+    }
+
+    /** Resultado de una renovación: el id de la tienda permite publicar el evento tras el commit. */
+    public record ResultadoRenovacion(Estado estado, UUID tiendaId) {
+
+        public enum Estado {
+            RENOVADA,
+            VENCIDA,
+            OMITIDA
+        }
+    }
+
+    private record PendienteRenovacion(UUID suscripcionId, UUID tiendaId, UUID cobroId, BigDecimal monto, String moneda,
+                                       String token, Instant inicio, Instant fin, CicloFacturacion ciclo) {
     }
 
     private record Pendiente(UUID suscripcionId, UUID cobroId, BigDecimal monto, String moneda, String planAnterior) {
