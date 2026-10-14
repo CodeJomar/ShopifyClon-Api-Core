@@ -1,5 +1,6 @@
 package shopify.api.core.modulos.balance.servicio;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,5 +25,22 @@ public class BalanceServicio {
         BalanceTiendaEntidad balance = new BalanceTiendaEntidad();
         balance.setTiendaId(tiendaId);
         repositorio.save(balance);
+    }
+
+    /**
+     * BAL-001: al confirmar un pago. Ventas += total, comisiones += comisión, órdenes += 1, saldo += total − comisión.
+     * Solo lo llama la confirmación de pago (BAL-003); la fila se crea si la tienda aún no tiene balance.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void registrarVenta(UUID tiendaId, BigDecimal total, BigDecimal comision) {
+        crearSiNoExiste(tiendaId);
+        repositorio.sumarVenta(tiendaId, total, comision, total.subtract(comision));
+    }
+
+    /** BAL-002: al reembolsar. Reembolsado += monto y saldo −= monto. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void registrarReembolso(UUID tiendaId, BigDecimal monto) {
+        crearSiNoExiste(tiendaId);
+        repositorio.sumarReembolso(tiendaId, monto);
     }
 }
