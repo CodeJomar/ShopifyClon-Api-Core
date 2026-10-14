@@ -25,6 +25,7 @@ import shopify.api.core.modulos.tienda.dto.response.SuscripcionResumenResponse;
 import shopify.api.core.modulos.tienda.dto.response.TiendaConfiguracionResponse;
 import shopify.api.core.modulos.tienda.dto.response.TiendaVitrinaResponse;
 import shopify.api.core.modulos.tienda.entidad.TiendaEntidad;
+import shopify.api.core.modulos.tienda.modelo.ConfiguracionVenta;
 import shopify.api.core.modulos.tienda.mapeador.TiendaMapeador;
 import shopify.api.core.modulos.tienda.repositorio.TiendaRepositorio;
 
@@ -109,6 +110,14 @@ public class TiendaServicio {
                 .filter(tienda -> Boolean.TRUE.equals(tienda.getEstaActiva()) && suscripcionOperativa(tienda.getId()))
                 .map(mapeador::aVitrina)
                 .orElseThrow(() -> new RecursoNoEncontradoException("TIE-404", MENSAJE_TIENDA_NO_DISPONIBLE));
+    }
+
+    /** Moneda e impuesto con los que se calculan los montos de venta (CAR-005, checkout). */
+    @Transactional(readOnly = true)
+    public ConfiguracionVenta configuracionVenta(UUID tiendaId) {
+        TiendaEntidad tienda = tiendaRepositorio.findByIdAndEliminadoFalse(tiendaId)
+                .orElseThrow(() -> new RecursoNoEncontradoException("TIE-404", MENSAJE_TIENDA_NO_DISPONIBLE));
+        return new ConfiguracionVenta(tienda.getMoneda(), tienda.getTasaImpuesto(), tienda.getPreciosIncluyenImpuesto());
     }
 
     /** Id de la tienda del subdominio si es operativa (TIE-004); vacío si no existe o no lo es. */

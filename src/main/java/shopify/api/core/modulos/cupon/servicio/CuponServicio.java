@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import shopify.api.core.modulos.cupon.dto.response.CuponResponse;
 import shopify.api.core.modulos.cupon.entidad.CuponEntidad;
 import shopify.api.core.modulos.cupon.mapeador.CuponMapeador;
 import shopify.api.core.modulos.cupon.modelo.CuponAplicable;
+import shopify.api.core.modulos.cupon.modelo.EvaluacionCupon;
 import shopify.api.core.modulos.cupon.modelo.TipoDescuento;
 import shopify.api.core.modulos.cupon.modelo.ValidadorCupon;
 import shopify.api.core.modulos.cupon.repositorio.CuponRepositorio;
@@ -146,6 +148,32 @@ public class CuponServicio {
                     throw new ReglaNegocioException("CUP-003", motivo);
                 });
         return new CuponAplicable(cupon.getId(), cupon.getCodigo(), cupon.getTipoDescuento(), cupon.getValorDescuento());
+    }
+
+    /**
+     * Como {@link #evaluar} pero devuelve el motivo en lugar de lanzar. Un carrito lo usa en cada lectura: una
+     * excepción capturada dentro de una transacción compartida la dejaría marcada para revertir.
+     */
+    @Transactional(readOnly = true)
+    public EvaluacionCupon evaluarCupon(UUID tiendaId, String codigo, BigDecimal subtotal) {
+        Optional<CuponEntidad> encontrado = repositorio.findByTiendaIdAndCodigoAndEliminadoFalse(
+                tiendaId, normalizarCodigo(codigo));
+        if (encontrado.isEmpty()) {
+            return new EvaluacionCupon(null, "El cupón no existe");
+        }
+        CuponEntidad cupon = encontrado.get();
+        Optional<String> motivo = ValidadorCupon.motivoNoAplicable(cupon, subtotal, reloj.instant());
+        if (motivo.isPresent()) {
+            return new EvaluacionCupon(null, motivo.get());
+        }
+        return new EvaluacionCupon(new CuponAplicable(cupon.getId(), cupon.getCodigo(), cupon.getTipoDescuento(),
+                cupon.getValorDescuento()), null);
+    }
+
+    /** Código de un cupón de la tienda (lectura para el carrito); vacío si fue eliminado. */
+    @Transactional(readOnly = true)
+    public Optional<String> codigoDe(UUID tiendaId, UUID cuponId) {
+        return repositorio.findByIdAndTiendaIdAndEliminadoFalse(cuponId, tiendaId).map(CuponEntidad::getCodigo);
     }
 
     /** CUP-007: consume un uso con un UPDATE condicional; si no queda ninguno, CHK-005. */
