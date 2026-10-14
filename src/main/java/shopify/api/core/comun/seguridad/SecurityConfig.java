@@ -27,6 +27,7 @@ public class SecurityConfig {
 
     private final JwtFiltroAutenticacion jwtFiltroAutenticacion;
     private final JwtPuntoEntradaAutenticacion jwtPuntoEntradaAutenticacion;
+    private final AccesoDenegadoManejador accesoDenegadoManejador;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -38,6 +39,7 @@ public class SecurityConfig {
                 // Manejo de errores 401 personalizados
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(this.jwtPuntoEntradaAutenticacion)
+                        .accessDeniedHandler(this.accesoDenegadoManejador)
                 )
 
                 // Sesión sin estado (Stateless)
@@ -47,7 +49,18 @@ public class SecurityConfig {
 
                 // Reglas de autorización de endpoints
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Endpoints de autenticación y registro
+                        // Rutas públicas
+                        .requestMatchers("/auth/**", "/vitrina/**", "/webhooks/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/planes").permitAll()
+
+                        // Documentación OpenAPI / Swagger
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
+
+                        // TEMPORAL: se elimina al reescribir usuario (T-003)
                         .requestMatchers(
                                 "/usuarios/registro",
                                 "/usuarios/login",
@@ -55,19 +68,13 @@ public class SecurityConfig {
                                 "/usuarios/recuperar-clave/**"
                         ).permitAll()
 
-                        // 2. Catálogo público de la tienda (Storefront)
+                        // TEMPORAL: se elimina al reescribir catalogo (T-008)
                         .requestMatchers(HttpMethod.GET, "/catalogo/productos/**", "/catalogo/categorias/**").permitAll()
 
-                        // 3. Webhooks de pago externos (ej: Stripe)
+                        // TEMPORAL: se elimina al reescribir pago (T-016)
                         .requestMatchers("/pagos/webhook/**").permitAll()
 
-                        // 4. Documentación OpenAPI / Swagger
-                        .requestMatchers(
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html"
-                        ).permitAll()
-
+                        // TEMPORAL: se elimina al reescribir tienda (T-005)
                         .requestMatchers(HttpMethod.GET, "/tiendas/*").permitAll()
 
                         // Cualquier otra petición requiere autenticación por token JWT

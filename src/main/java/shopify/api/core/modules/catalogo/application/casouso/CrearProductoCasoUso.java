@@ -30,9 +30,6 @@ public class CrearProductoCasoUso {
     public EstadoOperacionDto ejecutar(CrearProductoRequest request) {
         UUID tiendaId = TenantContextHolder.getTenantId();
         if (tiendaId == null) {
-            tiendaId = request.getIdTienda();
-        }
-        if (tiendaId == null) {
             throw new ReglaNegocioException("Se requiere el encabezado X-Tienda-Id para crear productos");
         }
 

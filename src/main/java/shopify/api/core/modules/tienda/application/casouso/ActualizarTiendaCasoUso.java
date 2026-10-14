@@ -9,7 +9,7 @@ import shopify.api.core.modules.tienda.domain.puerto.salida.TiendaRepositorioPue
 import shopify.api.core.comun.dto.EstadoOperacionDto;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 import shopify.api.core.comun.excepcion.ReglaNegocioException;
-import shopify.api.core.comun.seguridad.SeguridadUtil;
+import shopify.api.core.comun.seguridad.SesionActual;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -22,7 +22,7 @@ public class ActualizarTiendaCasoUso {
 
     @Transactional
     public EstadoOperacionDto ejecutar(UUID id, ActualizarTiendaRequest request) {
-        UUID usuarioActual = SeguridadUtil.obtenerUsuarioIdActual();
+        UUID usuarioActual = SesionActual.usuarioId();
 
         Tienda tienda = tiendaRepositorio.buscarPorId(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Tienda no encontrada con ID: " + id));

@@ -8,7 +8,7 @@ import shopify.api.core.modules.tienda.domain.modelo.Tienda;
 import shopify.api.core.modules.tienda.domain.puerto.salida.TiendaRepositorioPuerto;
 import shopify.api.core.comun.dto.EstadoOperacionDto;
 import shopify.api.core.comun.excepcion.ReglaNegocioException;
-import shopify.api.core.comun.seguridad.SeguridadUtil;
+import shopify.api.core.comun.seguridad.SesionActual;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -21,7 +21,7 @@ public class CrearTiendaCasoUso {
 
     @Transactional
     public EstadoOperacionDto ejecutar(CrearTiendaRequest request) {
-        UUID propietarioId = SeguridadUtil.obtenerUsuarioIdActual();
+        UUID propietarioId = SesionActual.usuarioId();
         String subdominioLimpio = request.getSubdominio().trim().toLowerCase(Locale.ROOT);
 
         if (tiendaRepositorio.existePorSubdominio(subdominioLimpio)) {

@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.modules.tienda.application.dto.response.TiendaResponse;
 import shopify.api.core.modules.tienda.application.mapeador.TiendaAplicacionMapeador;
 import shopify.api.core.modules.tienda.domain.puerto.salida.TiendaRepositorioPuerto;
-import shopify.api.core.comun.seguridad.SeguridadUtil;
+import shopify.api.core.comun.seguridad.SesionActual;
 
 import java.util.List;
 import java.util.UUID;
@@ -20,7 +20,7 @@ public class ObtenerMisTiendasCasoUso {
 
     @Transactional(readOnly = true)
     public List<TiendaResponse> ejecutar() {
-        UUID propietarioId = SeguridadUtil.obtenerUsuarioIdActual();
+        UUID propietarioId = SesionActual.usuarioId();
         return tiendaRepositorio.buscarPorPropietarioId(propietarioId).stream()
                 .map(mapeador::aResponse)
                 .toList();

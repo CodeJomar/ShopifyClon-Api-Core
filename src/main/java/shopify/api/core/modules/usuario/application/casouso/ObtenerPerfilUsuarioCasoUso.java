@@ -8,7 +8,7 @@ import shopify.api.core.modules.usuario.application.mapeador.UsuarioAplicacionMa
 import shopify.api.core.modules.usuario.domain.modelo.Usuario;
 import shopify.api.core.modules.usuario.domain.puerto.salida.UsuarioRepositorioPuerto;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
-import shopify.api.core.comun.seguridad.SeguridadUtil;
+import shopify.api.core.comun.seguridad.SesionActual;
 
 import java.util.UUID;
 
@@ -21,7 +21,7 @@ public class ObtenerPerfilUsuarioCasoUso {
 
     @Transactional(readOnly = true)
     public UsuarioResponse ejecutar() {
-        UUID usuarioId = SeguridadUtil.obtenerUsuarioIdActual();
+        UUID usuarioId = SesionActual.usuarioId();
 
         Usuario usuario = usuarioRepositorio.buscarPorId(usuarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado con ID: " + usuarioId));

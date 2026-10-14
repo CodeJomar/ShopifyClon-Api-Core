@@ -4,11 +4,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import shopify.api.core.comun.dto.BaseInputDto;
 
 @Getter
 @Setter
-public class ActualizarProductoRequest extends BaseInputDto {
+public class ActualizarProductoRequest {
 
     @NotBlank(message = "El título del producto es obligatorio")
     @Size(max = 200, message = "El título no puede superar los 200 caracteres")

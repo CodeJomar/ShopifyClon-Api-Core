@@ -6,11 +6,10 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import shopify.api.core.comun.dto.BaseInputDto;
 
 @Getter
 @Setter
-public class RegistroUsuarioRequest extends BaseInputDto {
+public class RegistroUsuarioRequest {
 
     @NotBlank(message = "El correo electrónico es obligatorio")
     @Email(message = "El formato de correo no es válido")

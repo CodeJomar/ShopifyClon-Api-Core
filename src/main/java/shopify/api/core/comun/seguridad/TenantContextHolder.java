@@ -2,6 +2,11 @@ package shopify.api.core.comun.seguridad;
 
 import java.util.UUID;
 
+/**
+ * Solo para los módulos viejos. Ahora contiene únicamente tiendas ya validadas por
+ * {@link ContextoTiendaInterceptor}; los módulos nuevos reciben {@link ContextoTienda} por parámetro.
+ */
+@Deprecated
 public final class TenantContextHolder {
 
     private static final ThreadLocal<UUID> TENANT_ACTUAL = new ThreadLocal<>();

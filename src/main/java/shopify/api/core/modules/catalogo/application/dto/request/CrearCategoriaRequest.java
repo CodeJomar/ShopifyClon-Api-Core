@@ -4,11 +4,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import shopify.api.core.comun.dto.BaseInputDto;
 
 @Getter
 @Setter
-public class CrearCategoriaRequest extends BaseInputDto {
+public class CrearCategoriaRequest {
 
     @NotBlank(message = "El nombre de la categoría es obligatorio")
     @Size(max = 100, message = "El nombre no puede superar los 100 caracteres")
