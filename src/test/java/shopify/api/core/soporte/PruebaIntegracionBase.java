@@ -109,8 +109,10 @@ public abstract class PruebaIntegracionBase {
     }
 
     protected void agregarPersonal(UUID tiendaId, UUID usuarioId, String codigoRol) {
-        jdbc.update("INSERT INTO \"Roles\" (\"Nombre\", \"Codigo\") VALUES (?, ?) ON CONFLICT (\"Codigo\") DO NOTHING",
-                codigoRol, codigoRol);
+        // Los roles retirados por V3 (CLIENTE, ADMIN_TIENDA) se siembran ya eliminados, como quedan tras la migración
+        boolean retirado = codigoRol.equals("CLIENTE") || codigoRol.equals("ADMIN_TIENDA");
+        jdbc.update("INSERT INTO \"Roles\" (\"Nombre\", \"Codigo\", \"Eliminado\") VALUES (?, ?, ?) "
+                + "ON CONFLICT (\"Codigo\") DO NOTHING", codigoRol, codigoRol, retirado);
         jdbc.update("INSERT INTO \"PersonalTienda\" (\"TiendaId\", \"UsuarioId\", \"RolId\") "
                 + "SELECT ?, ?, \"Id\" FROM \"Roles\" WHERE \"Codigo\" = ?", tiendaId, usuarioId, codigoRol);
     }

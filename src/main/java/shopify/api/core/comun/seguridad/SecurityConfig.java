@@ -60,14 +60,6 @@ public class SecurityConfig {
                                 "/swagger-ui.html"
                         ).permitAll()
 
-                        // TEMPORAL: se elimina al reescribir usuario (T-003)
-                        .requestMatchers(
-                                "/usuarios/registro",
-                                "/usuarios/login",
-                                "/usuarios/activar-cuenta",
-                                "/usuarios/recuperar-clave/**"
-                        ).permitAll()
-
                         // TEMPORAL: se elimina al reescribir catalogo (T-008)
                         .requestMatchers(HttpMethod.GET, "/catalogo/productos/**", "/catalogo/categorias/**").permitAll()
 

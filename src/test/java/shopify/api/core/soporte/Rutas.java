@@ -6,8 +6,26 @@ package shopify.api.core.soporte;
  */
 public final class Rutas {
 
-    // Registro de usuarios (módulo viejo; se reemplaza en T-003)
-    public static final String USUARIOS_REGISTRO = "/usuarios/registro";
+    // Autenticación (públicas)
+    public static final String AUTH_REGISTRO = "/auth/registro";
+    public static final String AUTH_ACTIVAR = "/auth/activar";
+    public static final String AUTH_REENVIAR_ACTIVACION = "/auth/reenviar-activacion";
+    public static final String AUTH_LOGIN = "/auth/login";
+    public static final String AUTH_RECUPERAR_SOLICITAR = "/auth/recuperar-clave/solicitar";
+    public static final String AUTH_RECUPERAR_CONFIRMAR = "/auth/recuperar-clave/confirmar";
+
+    // Cuenta del usuario
+    public static final String CUENTA_PERFIL = "/cuenta/perfil";
+    public static final String CUENTA_CONTRASENA = "/cuenta/contrasena";
+    public static final String CUENTA_DIRECCIONES = "/cuenta/direcciones";
+
+    public static String cuentaDireccion(Object id) {
+        return CUENTA_DIRECCIONES + "/" + id;
+    }
+
+    public static String cuentaDireccionPrincipal(Object id) {
+        return CUENTA_DIRECCIONES + "/" + id + "/principal";
+    }
 
     // Controlador de prueba del núcleo comun (solo existe en src/test)
     public static final String PRUEBA_PANEL = "/prueba-comun/panel";

@@ -28,9 +28,24 @@ class MigracionesTest extends PruebaIntegracionBase {
     }
 
     @Test
-    void flywayAplicoLasVersiones1Y2() {
+    void flywayAplicoLasVersiones1A3() {
         List<String> versiones = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = true AND version IS NOT NULL", String.class);
-        assertThat(versiones).contains("1", "2");
+        assertThat(versiones).contains("1", "2", "3");
+    }
+
+    @Test
+    void v3RetiraLosRolesClienteYAdminTienda() {
+        List<Boolean> eliminados = jdbc.queryForList(
+                "SELECT \"Eliminado\" FROM \"Roles\" WHERE \"Codigo\" IN ('CLIENTE', 'ADMIN_TIENDA')", Boolean.class);
+        assertThat(eliminados).isNotEmpty().allMatch(Boolean::booleanValue);
+    }
+
+    @Test
+    void v3AgregaIntentosFallidosATokens() {
+        Integer columnas = jdbc.queryForObject(
+                "SELECT count(*) FROM information_schema.columns "
+                        + "WHERE table_name = 'TokensSeguridad' AND column_name = 'IntentosFallidos'", Integer.class);
+        assertThat(columnas).isEqualTo(1);
     }
 }
