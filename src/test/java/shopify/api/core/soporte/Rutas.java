@@ -54,6 +54,17 @@ public final class Rutas {
         return PANEL_CUPONES + "/" + id;
     }
 
+    // Tarifas de envío
+    public static final String PANEL_ENVIOS_TARIFAS = "/panel/envios/tarifas";
+
+    public static String panelEnvioTarifa(Object id) {
+        return PANEL_ENVIOS_TARIFAS + "/" + id;
+    }
+
+    public static String vitrinaTarifasEnvio(String subdominio) {
+        return vitrina(subdominio) + "/tarifas-envio";
+    }
+
     // Controlador de prueba del núcleo comun (solo existe en src/test)
     public static final String PRUEBA_PANEL = "/prueba-comun/panel";
     public static final String PRUEBA_PANEL_SIN_PERMISO = "/prueba-comun/panel-sin-permiso";
