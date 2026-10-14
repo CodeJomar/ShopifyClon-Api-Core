@@ -95,6 +95,10 @@ public final class Rutas {
         return panelOrdenPagos(ordenId) + "/manual";
     }
 
+    public static String vitrinaOrdenes(String subdominio) {
+        return vitrina(subdominio) + "/ordenes";
+    }
+
     public static String vitrinaCarrito(String subdominio) {
         return vitrina(subdominio) + "/carrito";
     }

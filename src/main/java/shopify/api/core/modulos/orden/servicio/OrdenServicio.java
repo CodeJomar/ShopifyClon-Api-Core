@@ -96,7 +96,25 @@ public class OrdenServicio {
     /** Bloquea la orden de la tienda (FOR UPDATE) y la devuelve con lo necesario para decidir y operar. */
     @Transactional(propagation = Propagation.MANDATORY)
     public OrdenEstado bloquear(UUID tiendaId, UUID ordenId) {
-        OrdenEntidad orden = ordenes.bloquearPorIdYTienda(ordenId, tiendaId).orElseThrow(OrdenServicio::noEncontrada);
+        return estadoDe(ordenes.bloquearPorIdYTienda(ordenId, tiendaId).orElseThrow(OrdenServicio::noEncontrada));
+    }
+
+    /**
+     * Orden de la tienda por el token de acceso del comprador (ORD-010), sin bloquear. Para decidir antes de un pago
+     * en línea; la decisión definitiva se toma otra vez al bloquear.
+     */
+    @Transactional(readOnly = true)
+    public Optional<OrdenEstado> leerPorTokenAcceso(UUID tiendaId, String tokenAcceso) {
+        return ordenes.findFirstByTokenAccesoAndTiendaIdAndEliminadoFalse(tokenAcceso, tiendaId).map(this::estadoDe);
+    }
+
+    /** Tienda a la que pertenece la orden; vacío si no existe. Para resolver webhooks, que no llevan tienda. */
+    @Transactional(readOnly = true)
+    public Optional<UUID> tiendaDeOrden(UUID ordenId) {
+        return ordenes.findFirstByIdAndEliminadoFalse(ordenId).map(OrdenEntidad::getTiendaId);
+    }
+
+    private OrdenEstado estadoDe(OrdenEntidad orden) {
         List<LineaOrden> lineas = lineasDe(orden.getId());
         return new OrdenEstado(orden.getId(), orden.getEstado(), orden.getEstadoPago(), orden.getEstadoPreparacion(),
                 orden.getTotal(), orden.getPasarelaPago(), orden.getFechaExpiracionPago(), orden.getCuponId(), lineas,
