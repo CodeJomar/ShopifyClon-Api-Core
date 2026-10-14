@@ -6,8 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.modules.catalogo.application.dto.request.ActualizarCategoriaRequest;
 import shopify.api.core.modules.catalogo.domain.modelo.Categoria;
 import shopify.api.core.modules.catalogo.domain.puerto.salida.CategoriaRepositorioPuerto;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.exception.RecursoNoEncontradoException;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 
 import java.util.UUID;
 

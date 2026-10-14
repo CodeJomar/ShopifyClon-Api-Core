@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.modules.catalogo.application.casouso.ListarProductosCasoUso;
 import shopify.api.core.modules.catalogo.application.dto.request.ProductoQueryInput;
 import shopify.api.core.modules.catalogo.application.dto.response.ProductoResumenResponse;
-import shopify.api.core.shared.dto.ConsultaPaginadaDto;
-import shopify.api.core.shared.dto.RespuestaApi;
+import shopify.api.core.comun.dto.ConsultaPaginadaDto;
+import shopify.api.core.comun.dto.RespuestaApi;
 
 @Tag(name = "Catálogo - Productos")
 @RestController

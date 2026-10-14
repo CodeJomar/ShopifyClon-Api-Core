@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.modules.tienda.application.casouso.ObtenerTiendaPorSubdominioCasoUso;
 import shopify.api.core.modules.tienda.application.dto.response.TiendaResponse;
-import shopify.api.core.shared.dto.ConsultaIndividualDto;
-import shopify.api.core.shared.dto.RespuestaApi;
+import shopify.api.core.comun.dto.ConsultaIndividualDto;
+import shopify.api.core.comun.dto.RespuestaApi;
 
 @Tag(name = "Tiendas")
 @RestController

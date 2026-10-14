@@ -7,8 +7,8 @@ import shopify.api.core.modules.usuario.application.dto.response.UsuarioResponse
 import shopify.api.core.modules.usuario.application.mapeador.UsuarioAplicacionMapeador;
 import shopify.api.core.modules.usuario.domain.modelo.Usuario;
 import shopify.api.core.modules.usuario.domain.puerto.salida.UsuarioRepositorioPuerto;
-import shopify.api.core.shared.exception.RecursoNoEncontradoException;
-import shopify.api.core.shared.seguridad.servicio.SeguridadUtil;
+import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
+import shopify.api.core.comun.seguridad.SeguridadUtil;
 
 import java.util.UUID;
 

@@ -3,7 +3,7 @@ package shopify.api.core.modules.catalogo.application.dto.request;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.Setter;
-import shopify.api.core.shared.dto.BaseInputDto;
+import shopify.api.core.comun.dto.BaseInputDto;
 
 import java.math.BigDecimal;
 import java.util.UUID;

@@ -6,9 +6,9 @@ import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.modules.catalogo.application.dto.request.CrearCategoriaRequest;
 import shopify.api.core.modules.catalogo.domain.modelo.Categoria;
 import shopify.api.core.modules.catalogo.domain.puerto.salida.CategoriaRepositorioPuerto;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.exception.ReglaNegocioException;
-import shopify.api.core.shared.multitenancy.TenantContextHolder;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.excepcion.ReglaNegocioException;
+import shopify.api.core.comun.seguridad.TenantContextHolder;
 
 import java.text.Normalizer;
 import java.util.Locale;

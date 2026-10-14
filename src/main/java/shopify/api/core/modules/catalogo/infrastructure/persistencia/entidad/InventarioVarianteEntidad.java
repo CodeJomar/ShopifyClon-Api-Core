@@ -3,7 +3,7 @@ package shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import shopify.api.core.shared.auditoria.AuditoriaEntidad;
+import shopify.api.core.comun.auditoria.AuditoriaEntidad;
 
 @Getter
 @Setter

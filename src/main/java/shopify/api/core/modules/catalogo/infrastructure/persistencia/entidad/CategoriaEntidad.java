@@ -5,7 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-import shopify.api.core.shared.auditoria.AuditoriaEntidad;
+import shopify.api.core.comun.auditoria.AuditoriaEntidad;
 
 import java.util.UUID;
 

@@ -7,7 +7,7 @@ import shopify.api.core.modules.tienda.application.dto.response.TiendaResponse;
 import shopify.api.core.modules.tienda.application.mapeador.TiendaAplicacionMapeador;
 import shopify.api.core.modules.tienda.domain.modelo.Tienda;
 import shopify.api.core.modules.tienda.domain.puerto.salida.TiendaRepositorioPuerto;
-import shopify.api.core.shared.exception.RecursoNoEncontradoException;
+import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 
 import java.util.Locale;
 

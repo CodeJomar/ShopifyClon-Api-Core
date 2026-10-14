@@ -6,9 +6,9 @@ import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.modules.catalogo.application.dto.request.AjustarInventarioRequest;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad.InventarioVarianteEntidad;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.repositorio.InventarioVarianteJpaRepositorio;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.exception.RecursoNoEncontradoException;
-import shopify.api.core.shared.exception.ReglaNegocioException;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
+import shopify.api.core.comun.excepcion.ReglaNegocioException;
 
 import java.util.UUID;
 

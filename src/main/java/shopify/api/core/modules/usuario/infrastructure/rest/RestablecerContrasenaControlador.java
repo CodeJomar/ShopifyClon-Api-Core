@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.modules.usuario.application.casouso.RestablecerContrasenaCasoUso;
 import shopify.api.core.modules.usuario.application.dto.request.RestablecerContrasenaRequest;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.dto.RespuestaApi;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.dto.RespuestaApi;
 
 @Tag(name = "Usuarios y Seguridad")
 @RestController

@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.modules.tienda.application.dto.response.TiendaResponse;
 import shopify.api.core.modules.tienda.application.mapeador.TiendaAplicacionMapeador;
 import shopify.api.core.modules.tienda.domain.puerto.salida.TiendaRepositorioPuerto;
-import shopify.api.core.shared.seguridad.servicio.SeguridadUtil;
+import shopify.api.core.comun.seguridad.SeguridadUtil;
 
 import java.util.List;
 import java.util.UUID;

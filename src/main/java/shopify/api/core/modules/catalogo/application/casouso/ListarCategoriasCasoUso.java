@@ -10,8 +10,8 @@ import shopify.api.core.modules.catalogo.application.dto.request.CategoriaQueryI
 import shopify.api.core.modules.catalogo.application.dto.response.CategoriaResponse;
 import shopify.api.core.modules.catalogo.application.mapeador.CategoriaAplicacionMapeador;
 import shopify.api.core.modules.catalogo.domain.puerto.salida.CategoriaRepositorioPuerto;
-import shopify.api.core.shared.dto.ConsultaPaginadaDto;
-import shopify.api.core.shared.multitenancy.TenantContextHolder;
+import shopify.api.core.comun.dto.ConsultaPaginadaDto;
+import shopify.api.core.comun.seguridad.TenantContextHolder;
 
 import java.util.UUID;
 

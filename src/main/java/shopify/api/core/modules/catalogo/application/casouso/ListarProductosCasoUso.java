@@ -13,8 +13,8 @@ import shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad.Inv
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad.ProductoEntidad;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad.VarianteProductoEntidad;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.repositorio.ProductoJpaRepositorio;
-import shopify.api.core.shared.dto.ConsultaPaginadaDto;
-import shopify.api.core.shared.multitenancy.TenantContextHolder;
+import shopify.api.core.comun.dto.ConsultaPaginadaDto;
+import shopify.api.core.comun.seguridad.TenantContextHolder;
 
 import java.math.BigDecimal;
 import java.util.UUID;

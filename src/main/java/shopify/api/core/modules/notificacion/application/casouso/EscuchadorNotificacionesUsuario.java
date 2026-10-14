@@ -8,8 +8,8 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import shopify.api.core.shared.event.CodigoRecuperacionGeneradoEvento;
-import shopify.api.core.shared.event.UsuarioRegistradoEvento;
+import shopify.api.core.comun.evento.CodigoRecuperacionGeneradoEvento;
+import shopify.api.core.comun.evento.UsuarioRegistradoEvento;
 
 @Slf4j
 @Component

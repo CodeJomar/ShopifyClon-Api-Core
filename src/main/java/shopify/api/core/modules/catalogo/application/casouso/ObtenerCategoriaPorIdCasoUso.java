@@ -7,7 +7,7 @@ import shopify.api.core.modules.catalogo.application.dto.response.CategoriaRespo
 import shopify.api.core.modules.catalogo.application.mapeador.CategoriaAplicacionMapeador;
 import shopify.api.core.modules.catalogo.domain.modelo.Categoria;
 import shopify.api.core.modules.catalogo.domain.puerto.salida.CategoriaRepositorioPuerto;
-import shopify.api.core.shared.exception.RecursoNoEncontradoException;
+import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 
 import java.util.UUID;
 

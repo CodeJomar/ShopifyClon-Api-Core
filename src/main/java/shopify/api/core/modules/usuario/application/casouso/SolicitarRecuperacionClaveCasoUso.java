@@ -8,9 +8,9 @@ import shopify.api.core.modules.usuario.infrastructure.persistencia.entidad.Toke
 import shopify.api.core.modules.usuario.infrastructure.persistencia.entidad.UsuarioEntidad;
 import shopify.api.core.modules.usuario.infrastructure.persistencia.repositorio.TokenSeguridadJpaRepositorio;
 import shopify.api.core.modules.usuario.infrastructure.persistencia.repositorio.UsuarioJpaRepositorio;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.event.CodigoRecuperacionGeneradoEvento;
-import shopify.api.core.shared.event.PublicadorEvento;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.evento.CodigoRecuperacionGeneradoEvento;
+import shopify.api.core.comun.evento.PublicadorEvento;
 
 import java.security.SecureRandom;
 import java.time.Instant;

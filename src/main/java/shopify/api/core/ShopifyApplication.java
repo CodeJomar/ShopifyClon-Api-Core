@@ -5,7 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.scheduling.annotation.EnableAsync;
-import shopify.api.core.config.DotenvInitializer;
+import shopify.api.core.comun.config.DotenvInitializer;
 
 @EnableAsync
 @SpringBootApplication

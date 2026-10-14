@@ -6,8 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.modules.catalogo.application.dto.request.ActualizarProductoRequest;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad.ProductoEntidad;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.repositorio.ProductoJpaRepositorio;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.exception.RecursoNoEncontradoException;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 
 import java.util.UUID;
 

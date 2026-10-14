@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.modules.catalogo.application.casouso.CrearProductoCasoUso;
 import shopify.api.core.modules.catalogo.application.dto.request.CrearProductoRequest;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.dto.RespuestaApi;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.dto.RespuestaApi;
 
 @Tag(name = "Catálogo - Productos", description = "Gestión de productos, variantes e inventario")
 @RestController

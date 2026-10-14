@@ -7,9 +7,9 @@ import org.springframework.util.StringUtils;
 import shopify.api.core.modules.catalogo.application.dto.request.CrearProductoRequest;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad.*;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.repositorio.*;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.exception.ReglaNegocioException;
-import shopify.api.core.shared.multitenancy.TenantContextHolder;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.excepcion.ReglaNegocioException;
+import shopify.api.core.comun.seguridad.TenantContextHolder;
 
 import java.text.Normalizer;
 import java.util.Locale;

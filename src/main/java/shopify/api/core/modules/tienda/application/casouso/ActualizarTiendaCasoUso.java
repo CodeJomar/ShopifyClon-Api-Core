@@ -6,10 +6,10 @@ import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.modules.tienda.application.dto.request.ActualizarTiendaRequest;
 import shopify.api.core.modules.tienda.domain.modelo.Tienda;
 import shopify.api.core.modules.tienda.domain.puerto.salida.TiendaRepositorioPuerto;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.exception.RecursoNoEncontradoException;
-import shopify.api.core.shared.exception.ReglaNegocioException;
-import shopify.api.core.shared.seguridad.servicio.SeguridadUtil;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
+import shopify.api.core.comun.excepcion.ReglaNegocioException;
+import shopify.api.core.comun.seguridad.SeguridadUtil;
 
 import java.util.Locale;
 import java.util.UUID;

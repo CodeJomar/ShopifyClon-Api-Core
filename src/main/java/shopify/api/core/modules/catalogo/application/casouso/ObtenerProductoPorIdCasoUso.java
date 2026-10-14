@@ -7,7 +7,7 @@ import shopify.api.core.modules.catalogo.application.dto.response.ProductoDetall
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad.ImagenProductoEntidad;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.entidad.ProductoEntidad;
 import shopify.api.core.modules.catalogo.infrastructure.persistencia.repositorio.ProductoJpaRepositorio;
-import shopify.api.core.shared.exception.RecursoNoEncontradoException;
+import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 
 import java.util.UUID;
 

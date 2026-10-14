@@ -8,8 +8,8 @@ import shopify.api.core.modules.usuario.application.dto.request.LoginUsuarioRequ
 import shopify.api.core.modules.usuario.application.dto.response.AuthResponse;
 import shopify.api.core.modules.usuario.domain.modelo.Usuario;
 import shopify.api.core.modules.usuario.domain.puerto.salida.UsuarioRepositorioPuerto;
-import shopify.api.core.shared.exception.ReglaNegocioException;
-import shopify.api.core.shared.seguridad.jwt.JwtProveedor;
+import shopify.api.core.comun.excepcion.ReglaNegocioException;
+import shopify.api.core.comun.seguridad.jwt.JwtProveedor;
 
 import java.util.HashMap;
 import java.util.Map;

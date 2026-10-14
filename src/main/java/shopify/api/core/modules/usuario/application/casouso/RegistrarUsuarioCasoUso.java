@@ -12,10 +12,10 @@ import shopify.api.core.modules.usuario.infrastructure.persistencia.entidad.Toke
 import shopify.api.core.modules.usuario.infrastructure.persistencia.entidad.UsuarioEntidad;
 import shopify.api.core.modules.usuario.infrastructure.persistencia.repositorio.TokenSeguridadJpaRepositorio;
 import shopify.api.core.modules.usuario.infrastructure.persistencia.repositorio.UsuarioJpaRepositorio;
-import shopify.api.core.shared.dto.EstadoOperacionDto;
-import shopify.api.core.shared.event.PublicadorEvento;
-import shopify.api.core.shared.event.UsuarioRegistradoEvento;
-import shopify.api.core.shared.exception.ReglaNegocioException;
+import shopify.api.core.comun.dto.EstadoOperacionDto;
+import shopify.api.core.comun.evento.PublicadorEvento;
+import shopify.api.core.comun.evento.UsuarioRegistradoEvento;
+import shopify.api.core.comun.excepcion.ReglaNegocioException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;

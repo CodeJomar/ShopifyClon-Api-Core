@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.modules.catalogo.application.casouso.ObtenerCategoriaPorIdCasoUso;
 import shopify.api.core.modules.catalogo.application.dto.response.CategoriaResponse;
-import shopify.api.core.shared.dto.ConsultaIndividualDto;
-import shopify.api.core.shared.dto.RespuestaApi;
+import shopify.api.core.comun.dto.ConsultaIndividualDto;
+import shopify.api.core.comun.dto.RespuestaApi;
 
 import java.util.UUID;
 
