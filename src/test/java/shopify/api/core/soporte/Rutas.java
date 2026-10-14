@@ -47,6 +47,22 @@ public final class Rutas {
         return PANEL_PERSONAL + "/" + usuarioId;
     }
 
+    // Catálogo (panel y vitrina)
+    public static final String PANEL_CATALOGO_PRODUCTOS = "/panel/catalogo/productos";
+    public static final String PANEL_CATALOGO_CATEGORIAS = "/panel/catalogo/categorias";
+
+    public static String panelProducto(Object id) {
+        return PANEL_CATALOGO_PRODUCTOS + "/" + id;
+    }
+
+    public static String panelProductoAccion(Object id, String accion) {
+        return PANEL_CATALOGO_PRODUCTOS + "/" + id + "/" + accion;
+    }
+
+    public static String panelCategoria(Object id) {
+        return PANEL_CATALOGO_CATEGORIAS + "/" + id;
+    }
+
     // Cupones del panel
     public static final String PANEL_CUPONES = "/panel/cupones";
 

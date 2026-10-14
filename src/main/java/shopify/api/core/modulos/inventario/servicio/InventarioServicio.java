@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.modulos.inventario.entidad.InventarioVarianteEntidad;
 import shopify.api.core.modulos.inventario.entidad.MovimientoInventarioEntidad;
+import shopify.api.core.modulos.inventario.modelo.Cantidades;
 import shopify.api.core.modulos.inventario.modelo.Disponibilidad;
 import shopify.api.core.modulos.inventario.modelo.TipoMovimiento;
 import shopify.api.core.modulos.inventario.repositorio.InventarioVarianteRepositorio;
@@ -63,6 +64,21 @@ public class InventarioServicio {
         }
         for (InventarioVarianteEntidad inventario : inventarios.findByVarianteIdInAndEliminadoFalse(varianteIds)) {
             resultado.put(inventario.getVarianteId(), aDisponibilidad(inventario));
+        }
+        return resultado;
+    }
+
+    /** Cantidades crudas para el panel. Variantes sin fila de inventario no aparecen. */
+    @Transactional(readOnly = true)
+    public Map<UUID, Cantidades> cantidades(Collection<UUID> varianteIds) {
+        Map<UUID, Cantidades> resultado = new HashMap<>();
+        if (varianteIds == null || varianteIds.isEmpty()) {
+            return resultado;
+        }
+        for (InventarioVarianteEntidad inventario : inventarios.findByVarianteIdInAndEliminadoFalse(varianteIds)) {
+            resultado.put(inventario.getVarianteId(), new Cantidades(inventario.getCantidadDisponible(),
+                    inventario.getCantidadReservada(), Boolean.TRUE.equals(inventario.getRastreaInventario()),
+                    Boolean.TRUE.equals(inventario.getPermitirVentaSinStock())));
         }
         return resultado;
     }
