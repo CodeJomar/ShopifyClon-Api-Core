@@ -1,6 +1,7 @@
 package shopify.api.core.modulos.suscripcion.programador;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -15,6 +16,7 @@ import shopify.api.core.modulos.suscripcion.entidad.SuscripcionTiendaEntidad;
 import shopify.api.core.modulos.suscripcion.evento.SuscripcionRenovadaEvento;
 import shopify.api.core.modulos.suscripcion.evento.SuscripcionVencidaEvento;
 import shopify.api.core.modulos.suscripcion.modelo.EstadoSuscripcion;
+import shopify.api.core.modulos.suscripcion.repositorio.CobroSuscripcionRepositorio;
 import shopify.api.core.modulos.suscripcion.repositorio.SuscripcionTiendaRepositorio;
 import shopify.api.core.modulos.suscripcion.servicio.CobroSuscripcionServicio;
 
@@ -31,6 +33,7 @@ public class SuscripcionProgramador {
 
     private final SuscripcionTiendaRepositorio suscripciones;
     private final CobroSuscripcionServicio cobros;
+    private final CobroSuscripcionRepositorio cobrosRepositorio;
     private final PublicadorEvento publicador;
     private final TransactionTemplate transaccion;
     private final Clock reloj;
@@ -39,6 +42,9 @@ public class SuscripcionProgramador {
     @Scheduled(cron = "#{${app.programador.habilitado:true} ? '${app.programador.suscripciones.cron:0 0 * * * *}' : '-'}")
     public void ejecutar() {
         Instant ahora = reloj.instant();
+        // Cobros huérfanos (T-007): un PENDIENTE de más de una hora nunca recibió respuesta; se rechaza con motivo
+        transaccion.executeWithoutResult(estado -> cobrosRepositorio.rechazarPendientesAnteriores(
+                ahora.minus(Duration.ofHours(1)), "{\"motivo\": \"COBRO_HUERFANO\"}"));
         UUID ultimo = new UUID(0L, 0L);
         while (true) {
             UUID cursor = ultimo;
