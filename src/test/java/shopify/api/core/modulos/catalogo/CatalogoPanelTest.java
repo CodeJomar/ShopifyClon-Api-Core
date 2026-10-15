@@ -179,4 +179,41 @@ class CatalogoPanelTest extends PruebaCatalogoBase {
         assertThat(cuerpo(getConToken(Rutas.panelProducto(producto), propietario.token(), tienda)).get("datos")
                 .get("categorias")).isEmpty();
     }
+
+    @Test
+    void slugInvalidoAlEditarUnaCategoriaEs422CAT002() throws Exception {
+        UUID categoria = crearCategoria(tienda, "Calzado");
+
+        putJson(Rutas.panelCategoria(categoria), Map.of("nombre", "Calzado", "identificador_url", "Mal Slug!"),
+                propietario.token(), tienda)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("CAT-002"));
+        putJson(Rutas.panelCategoria(categoria), Map.of("nombre", "Calzado", "identificador_url", "-calzado-"),
+                propietario.token(), tienda)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("CAT-002"));
+
+        assertThat(slugDe(categoria)).isEqualTo("calzado");
+    }
+
+    @Test
+    void slugRepetidoAlEditarUnaCategoriaEs422CAT002() throws Exception {
+        crearCategoria(tienda, "Calzado");
+        UUID accesorios = crearCategoria(tienda, "Accesorios");
+
+        putJson(Rutas.panelCategoria(accesorios), Map.of("nombre", "Accesorios", "identificador_url", "calzado"),
+                propietario.token(), tienda)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("CAT-002"));
+        assertThat(slugDe(accesorios)).isEqualTo("accesorios");
+
+        // Conservar su propio slug no es un conflicto: la comprobación excluye la categoría editada
+        putJson(Rutas.panelCategoria(accesorios), Map.of("nombre", "Accesorios", "identificador_url", "accesorios"),
+                propietario.token(), tienda)
+                .andExpect(status().isOk());
+    }
+
+    private String slugDe(UUID categoria) {
+        return jdbc.queryForObject("SELECT \"IdentificadorUrl\" FROM \"Categorias\" WHERE \"Id\" = ?", String.class, categoria);
+    }
 }
