@@ -30,7 +30,6 @@ class ArquitecturaTest {
     static void importar() {
         clases = new ClassFileImporter()
                 .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-                .withImportOption(ubicacion -> !ubicacion.contains("/modules/"))
                 .importPackages("shopify.api.core");
     }
 
