@@ -70,13 +70,28 @@ public class PagoEnLineaServicio {
         long montoCentavos = total.movePointRight(2).longValueExact();
         // Fuera de transacción: la llamada a Stripe no retiene filas bloqueadas (PAG-010)
         IntentoPago intento = pasarela.crearIntento(orden.id(), tiendaId, montoCentavos, moneda);
-        transaccion.executeWithoutResult(estado -> registrarCargo(orden.id(), intento.id(), total, moneda));
+        // Si otro inicio de pago de la misma orden ganó la carrera, se reutiliza su intento (un solo PENDIENTE)
+        String intentoVigente = transaccion.execute(estado -> registrarCargo(tiendaId, orden.id(), intento.id(), total, moneda));
+        if (!intentoVigente.equals(intento.id())) {
+            IntentoPago existente = pasarela.recuperarIntento(intentoVigente);
+            return respuesta(existente, total, moneda);
+        }
         return respuesta(intento, total, moneda);
     }
 
-    /** Cargo PENDIENTE de la orden, ligado al intento de la pasarela (único por pasarela y transacción). */
+    /**
+     * Cargo PENDIENTE de la orden, ligado al intento de la pasarela. Bloquea la orden para que dos inicios simultáneos
+     * se serialicen: el segundo ve el cargo del primero y devuelve su intento (TODO(Q-T-022): el intento no usado queda
+     * sin cobrar en Stripe; no genera cargo).
+     */
     @Transactional(propagation = Propagation.MANDATORY)
-    public void registrarCargo(UUID ordenId, String intentoId, BigDecimal monto, String moneda) {
+    public String registrarCargo(UUID tiendaId, UUID ordenId, String intentoId, BigDecimal monto, String moneda) {
+        ordenes.bloquear(tiendaId, ordenId);
+        Optional<PagoEntidad> pendiente = pagos.findFirstByOrdenIdAndPasarelaPagoAndEstadoAndEliminadoFalse(
+                ordenId, PasarelaPago.STRIPE, EstadoRegistroPago.PENDIENTE);
+        if (pendiente.isPresent()) {
+            return pendiente.get().getTransaccionId();
+        }
         PagoEntidad pago = new PagoEntidad();
         pago.setOrdenId(ordenId);
         pago.setPasarelaPago(PasarelaPago.STRIPE);
@@ -86,6 +101,7 @@ public class PagoEnLineaServicio {
         pago.setEstado(EstadoRegistroPago.PENDIENTE);
         pago.setTipo(TipoPago.CARGO);
         pagos.saveAndFlush(pago);
+        return intentoId;
     }
 
     private static IniciarPagoResponse respuesta(IntentoPago intento, BigDecimal monto, String moneda) {
