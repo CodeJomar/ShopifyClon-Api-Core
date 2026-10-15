@@ -26,6 +26,11 @@ public interface TiendaRepositorio extends JpaRepository<TiendaEntidad, UUID> {
 
     Optional<TiendaEntidad> findBySubdominioAndEliminadoFalse(String subdominio);
 
+    /** Correo del propietario de la tienda (solo lectura; para avisos de suscripción). */
+    @Query(value = "SELECT u.\"CorreoElectronico\" FROM \"Usuarios\" u JOIN \"Tiendas\" t ON t.\"PropietarioId\" = u.\"Id\" "
+            + "WHERE t.\"Id\" = :tiendaId", nativeQuery = true)
+    Optional<String> correoDelPropietario(@Param("tiendaId") UUID tiendaId);
+
     /** TIE-005: con alguna orden la moneda ya no se puede cambiar. */
     @Query(value = "SELECT EXISTS (SELECT 1 FROM \"Ordenes\" WHERE \"TiendaId\" = :tiendaId)", nativeQuery = true)
     boolean tieneOrdenes(@Param("tiendaId") UUID tiendaId);
