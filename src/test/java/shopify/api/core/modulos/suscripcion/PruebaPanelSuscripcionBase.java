@@ -11,7 +11,7 @@ import shopify.api.core.soporte.Rutas;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Sesiones con token, tiendas creadas por la API y lecturas directas para las pruebas de suscripción. */
-abstract class PruebaPanelSuscripcionBase extends PruebaSuscripcionBase {
+public abstract class PruebaPanelSuscripcionBase extends PruebaSuscripcionBase {
 
     protected record Sesion(UUID id, String correo, String token) {
     }

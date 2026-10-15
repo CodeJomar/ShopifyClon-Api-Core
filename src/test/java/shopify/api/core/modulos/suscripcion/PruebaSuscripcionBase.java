@@ -9,7 +9,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import shopify.api.core.soporte.PruebaIntegracionBase;
 
 /** Utilidades para las pruebas del módulo suscripción. */
-abstract class PruebaSuscripcionBase extends PruebaIntegracionBase {
+public abstract class PruebaSuscripcionBase extends PruebaIntegracionBase {
 
     /** Los planes de prueba se borran al final de cada prueba: la base es compartida por todas las clases. */
     private final List<String> planesDePrueba = new ArrayList<>();
