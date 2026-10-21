@@ -1,6 +1,7 @@
 package shopify.api.core.modulos.carrito.controlador;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.comun.seguridad.LimitarPeticiones;
@@ -41,11 +43,17 @@ public class CarritoVitrinaControlador {
         return RespuestaApi.creado(carritoServicio.crear(subdominio), "Carrito creado");
     }
 
-    @Operation(summary = "Ver el carrito recalculado con precios actuales")
+    @Operation(summary = "Ver el carrito recalculado con precios actuales",
+            description = "Sin tarifa_envio_id responde sin envío (costo_envio ausente). Con tarifa_envio_id (tarifa activa de la "
+                    + "tienda) cotiza el envío y sus impuestos: costo_envio y total_estimado son los mismos que calculará el "
+                    + "checkout. Si ninguna línea requiere envío, el parámetro se ignora y costo_envio es 0.")
     @GetMapping
     public ResponseEntity<RespuestaApi<CarritoResponse>> ver(
-            @PathVariable String subdominio, @RequestHeader(value = ENCABEZADO_TOKEN, required = false) String token) {
-        return RespuestaApi.ok(carritoServicio.obtener(subdominio, token), "Carrito");
+            @PathVariable String subdominio,
+            @RequestHeader(value = ENCABEZADO_TOKEN, required = false) String token,
+            @Parameter(description = "Tarifa de envío elegida (UUID); opcional")
+            @RequestParam(value = "tarifa_envio_id", required = false) UUID tarifaEnvioId) {
+        return RespuestaApi.ok(carritoServicio.obtener(subdominio, token, tarifaEnvioId), "Carrito");
     }
 
     @Operation(summary = "Agregar una variante (suma cantidades)")
