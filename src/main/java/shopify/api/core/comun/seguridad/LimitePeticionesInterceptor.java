@@ -15,6 +15,7 @@ import org.springframework.web.servlet.HandlerMapping;
 public class LimitePeticionesInterceptor implements HandlerInterceptor {
 
     private final LimitadorPeticiones limitador;
+    private final IpClienteResolver ipClientes;
 
     @Override
     public boolean preHandle(
@@ -25,7 +26,7 @@ public class LimitePeticionesInterceptor implements HandlerInterceptor {
             LimitarPeticiones limite = metodo.getMethodAnnotation(LimitarPeticiones.class);
             if (limite != null) {
                 Object patron = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-                limitador.registrar(request.getRemoteAddr(),
+                limitador.registrar(ipClientes.ipDe(request),
                         patron == null ? request.getRequestURI() : patron.toString(), limite.porMinuto());
             }
         }
