@@ -39,5 +39,7 @@ docker-compose*.yml
 .DS_Store
 Thumbs.db
 
-# --- Archivos de base de datos / SQL sueltos ---
-src/main/resources/db/
+# --- SQL sueltos ---
+# OJO: src/main/resources/db/migration NO se excluye: Flyway lee las migraciones desde el jar.
+*.sql
+!src/main/resources/db/migration/*.sql
