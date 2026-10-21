@@ -6,7 +6,8 @@ import java.util.UUID;
 
 /**
  * Carrito recalculado con precios actuales (CAR-005, D-018). Las líneas que no se pueden vender salen con
- * advertencia CAR-006 y fuera de los totales.
+ * advertencia CAR-006 y fuera de los totales. {@code costoEnvio} es nulo salvo que se pida una tarifa (A-003);
+ * entonces {@code totalEstimado} incluye el envío y es idéntico al total del checkout.
  */
 public record CarritoResponse(
         String token,
@@ -16,6 +17,7 @@ public record CarritoResponse(
         Cupon cupon,
         BigDecimal subtotal,
         BigDecimal descuentoTotal,
+        BigDecimal costoEnvio,
         BigDecimal impuestosTotal,
         BigDecimal totalEstimado,
         boolean requiereEnvio,

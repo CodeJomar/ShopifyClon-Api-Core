@@ -24,6 +24,7 @@ import shopify.api.core.comun.util.GeneradorToken;
 import shopify.api.core.modulos.carrito.modelo.CarritoParaCheckout;
 import shopify.api.core.modulos.carrito.modelo.EstadoCarrito;
 import shopify.api.core.modulos.carrito.modelo.LineaCarrito;
+import shopify.api.core.modulos.carrito.servicio.CarritoCalculoServicio;
 import shopify.api.core.modulos.carrito.servicio.CarritoCheckoutServicio;
 import shopify.api.core.modulos.catalogo.modelo.VarianteVendible;
 import shopify.api.core.modulos.catalogo.servicio.CatalogoVentaServicio;
@@ -48,12 +49,8 @@ import shopify.api.core.modulos.orden.modelo.PasarelaPago;
 import shopify.api.core.modulos.orden.servicio.OrdenServicio;
 import shopify.api.core.modulos.tienda.modelo.ConfiguracionVenta;
 import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
-import shopify.api.core.modulos.totales.modelo.CalculadoraTotales;
 import shopify.api.core.modulos.totales.modelo.DescuentoCalculo;
-import shopify.api.core.modulos.totales.modelo.EnvioCalculo;
-import shopify.api.core.modulos.totales.modelo.ImpuestoCalculo;
 import shopify.api.core.modulos.totales.modelo.LineaCalculo;
-import shopify.api.core.modulos.totales.modelo.TipoDescuentoAplicado;
 import shopify.api.core.modulos.totales.modelo.TotalesCalculados;
 
 /**
@@ -74,6 +71,7 @@ public class CheckoutServicio {
     private final CatalogoVentaServicio catalogoVenta;
     private final TarifaEnvioServicio tarifas;
     private final CuponServicio cupones;
+    private final CarritoCalculoServicio calculoCarrito;
     private final InventarioServicio inventario;
     private final OrdenServicio ordenes;
     private final GeneradorToken generadorToken;
@@ -169,15 +167,14 @@ public class CheckoutServicio {
             CuponAplicable aplicable = evaluacion.aplicable();
             cuponId = aplicable.id();
             codigoCupon = aplicable.codigo();
-            descuento = new DescuentoCalculo(TipoDescuentoAplicado.valueOf(aplicable.tipo().name()), aplicable.valor());
+            descuento = CarritoCalculoServicio.descuentoDe(aplicable);
         }
 
         // Paso 7: recalcular y comparar con lo que vio el comprador (CHK-004)
         ConfiguracionVenta configuracion = tiendas.configuracionVenta(tiendaId);
         boolean incluido = Boolean.TRUE.equals(configuracion.preciosIncluyenImpuesto());
-        EnvioCalculo envio = tarifa == null ? null : new EnvioCalculo(tarifa.precio(), tarifa.montoMinimoGratis());
-        TotalesCalculados totales = CalculadoraTotales.calcular(lineasCalculo, descuento, envio,
-                new ImpuestoCalculo(configuracion.tasaImpuesto(), incluido));
+        // Misma función que usa la cotización del carrito (A-003): el total estimado es el que se compara aquí
+        TotalesCalculados totales = calculoCarrito.calcularTotales(lineasCalculo, descuento, tarifa, configuracion);
         if (solicitud.totalEsperado().compareTo(totales.total()) != 0) {
             throw new ConflictoEstadoException("CHK-004", "El total cambió desde que lo viste. Revísalo antes de confirmar",
                     Map.of("total_recalculado", totales.total()));

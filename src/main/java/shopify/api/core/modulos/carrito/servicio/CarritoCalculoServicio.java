@@ -20,12 +20,15 @@ import shopify.api.core.modulos.catalogo.servicio.CatalogoVentaServicio;
 import shopify.api.core.modulos.cupon.modelo.CuponAplicable;
 import shopify.api.core.modulos.cupon.modelo.EvaluacionCupon;
 import shopify.api.core.modulos.cupon.servicio.CuponServicio;
+import shopify.api.core.modulos.envio.modelo.TarifaAplicable;
+import shopify.api.core.modulos.envio.servicio.TarifaEnvioServicio;
 import shopify.api.core.modulos.inventario.modelo.Disponibilidad;
 import shopify.api.core.modulos.inventario.servicio.InventarioServicio;
 import shopify.api.core.modulos.tienda.modelo.ConfiguracionVenta;
 import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
 import shopify.api.core.modulos.totales.modelo.CalculadoraTotales;
 import shopify.api.core.modulos.totales.modelo.DescuentoCalculo;
+import shopify.api.core.modulos.totales.modelo.EnvioCalculo;
 import shopify.api.core.modulos.totales.modelo.ImpuestoCalculo;
 import shopify.api.core.modulos.totales.modelo.LineaCalculo;
 import shopify.api.core.modulos.totales.modelo.TipoDescuentoAplicado;
@@ -33,7 +36,7 @@ import shopify.api.core.modulos.totales.modelo.TotalesCalculados;
 
 /**
  * Arma la respuesta del carrito con precios, disponibilidad y cupón actuales (CAR-004, CAR-005, CAR-006).
- * Nunca guarda nada: cada lectura recalcula.
+ * Nunca guarda nada: cada lectura recalcula. Con una tarifa de envío (A-003) cotiza el total exacto del checkout.
  */
 @Service
 @RequiredArgsConstructor
@@ -45,9 +48,36 @@ public class CarritoCalculoServicio {
     private final InventarioServicio inventario;
     private final TiendaServicio tiendas;
     private final CuponServicio cupones;
+    private final TarifaEnvioServicio tarifas;
 
+    /**
+     * Fuente única del cálculo de totales de una venta: la usan la cotización del carrito y el checkout (paso 7),
+     * así el total estimado es idéntico al que se cobra. Tarifa nula = sin envío elegido.
+     */
+    public TotalesCalculados calcularTotales(List<LineaCalculo> lineas, DescuentoCalculo descuento,
+                                             TarifaAplicable tarifa, ConfiguracionVenta configuracion) {
+        EnvioCalculo envio = tarifa == null ? null : new EnvioCalculo(tarifa.precio(), tarifa.montoMinimoGratis());
+        return CalculadoraTotales.calcular(lineas, descuento, envio,
+                new ImpuestoCalculo(configuracion.tasaImpuesto(), Boolean.TRUE.equals(configuracion.preciosIncluyenImpuesto())));
+    }
+
+    /** Descuento de la calculadora a partir de un cupón que aplica; igual para la cotización y el checkout. */
+    public static DescuentoCalculo descuentoDe(CuponAplicable aplicable) {
+        return new DescuentoCalculo(TipoDescuentoAplicado.valueOf(aplicable.tipo().name()), aplicable.valor());
+    }
+
+    /** Carrito sin cotizar el envío (costo_envio nulo). */
     public CarritoResponse construir(UUID tiendaId, CarritoEntidad carrito, List<ItemCarritoEntidad> items,
                                      List<Advertencia> advertenciasPrevias) {
+        return construir(tiendaId, carrito, items, advertenciasPrevias, null);
+    }
+
+    /**
+     * Carrito recalculado. Con {@code tarifaEnvioId} y alguna línea que requiere envío, cotiza con esa tarifa
+     * (activa y de la tienda, o ENV-001); si ninguna línea requiere envío el parámetro no cambia nada y el costo es 0.
+     */
+    public CarritoResponse construir(UUID tiendaId, CarritoEntidad carrito, List<ItemCarritoEntidad> items,
+                                     List<Advertencia> advertenciasPrevias, UUID tarifaEnvioId) {
         ConfiguracionVenta configuracion = tiendas.configuracionVenta(tiendaId);
         List<UUID> ids = items.stream().map(ItemCarritoEntidad::getVarianteId).toList();
         Map<UUID, VarianteVendible> variantes = catalogoVenta.variantesParaVenta(tiendaId, ids);
@@ -102,8 +132,7 @@ public class CarritoCalculoServicio {
             } else {
                 EvaluacionCupon evaluacion = cupones.evaluarCupon(tiendaId, codigo.get(), subtotalVendible);
                 if (evaluacion.aplica()) {
-                    CuponAplicable aplicable = evaluacion.aplicable();
-                    descuento = new DescuentoCalculo(TipoDescuentoAplicado.valueOf(aplicable.tipo().name()), aplicable.valor());
+                    descuento = descuentoDe(evaluacion.aplicable());
                 } else {
                     advertencias.add(new Advertencia("CUP-003", evaluacion.motivo(), null));
                 }
@@ -113,16 +142,19 @@ public class CarritoCalculoServicio {
 
         if (lineasCalculo.isEmpty()) {
             return new CarritoResponse(carrito.getTokenSesion(), carrito.getEstado().name(), configuracion.moneda(),
-                    lineasRespuesta, cupon, Dinero.CERO, Dinero.CERO, Dinero.CERO, Dinero.CERO, false, advertencias);
+                    lineasRespuesta, cupon, Dinero.CERO, Dinero.CERO, tarifaEnvioId == null ? null : Dinero.CERO,
+                    Dinero.CERO, Dinero.CERO, false, advertencias);
         }
 
-        TotalesCalculados totales = CalculadoraTotales.calcular(lineasCalculo, descuento, null,
-                new ImpuestoCalculo(configuracion.tasaImpuesto(), Boolean.TRUE.equals(configuracion.preciosIncluyenImpuesto())));
+        boolean requiereEnvio = lineasCalculo.stream().anyMatch(LineaCalculo::requiereEnvio);
+        TarifaAplicable tarifa = tarifaEnvioId != null && requiereEnvio ? tarifas.buscarActiva(tiendaId, tarifaEnvioId) : null;
+        TotalesCalculados totales = calcularTotales(lineasCalculo, descuento, tarifa, configuracion);
         if (cupon != null) {
             cupon = new Cupon(cupon.codigo(), totales.descuentoTotal());
         }
         return new CarritoResponse(carrito.getTokenSesion(), carrito.getEstado().name(), configuracion.moneda(),
-                lineasRespuesta, cupon, totales.subtotal(), totales.descuentoTotal(), totales.impuestosTotal(),
+                lineasRespuesta, cupon, totales.subtotal(), totales.descuentoTotal(),
+                tarifaEnvioId == null ? null : totales.costoEnvio(), totales.impuestosTotal(),
                 totales.total(), totales.requiereEnvio(), advertencias);
     }
 }

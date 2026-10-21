@@ -62,9 +62,15 @@ public class CarritoServicio {
 
     @Transactional(readOnly = true)
     public CarritoResponse obtener(String subdominio, String token) {
+        return obtener(subdominio, token, null);
+    }
+
+    /** CAR-005 con envío (A-003): con {@code tarifaEnvioId} responde el total exacto que calculará el checkout. */
+    @Transactional(readOnly = true)
+    public CarritoResponse obtener(String subdominio, String token, UUID tarifaEnvioId) {
         UUID tiendaId = tienda(subdominio);
         CarritoEntidad carrito = buscar(tiendaId, token);
-        return calculo.construir(tiendaId, carrito, lineas(carrito), List.of());
+        return calculo.construir(tiendaId, carrito, lineas(carrito), List.of(), tarifaEnvioId);
     }
 
     /** CAR-002 y CAR-003: variante vendible de la tienda; sumar hasta 99; máximo 50 líneas. */
