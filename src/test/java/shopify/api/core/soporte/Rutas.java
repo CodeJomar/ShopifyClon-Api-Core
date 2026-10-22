@@ -47,6 +47,9 @@ public final class Rutas {
         return PANEL_PERSONAL + "/" + usuarioId;
     }
 
+    // Archivos (panel)
+    public static final String PANEL_ARCHIVOS_IMAGENES = "/panel/archivos/imagenes";
+
     // Inventario del panel
     public static final String PANEL_INVENTARIO_VARIANTES = "/panel/inventario/variantes";
 
