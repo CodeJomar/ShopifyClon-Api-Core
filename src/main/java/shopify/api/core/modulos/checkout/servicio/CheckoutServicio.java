@@ -147,6 +147,10 @@ public class CheckoutServicio {
             if (solicitud.direccionEnvio() == null) {
                 throw new ReglaNegocioException("VAL-001", "Indica la dirección de envío");
             }
+            // ENV-007: el punto de entrega marcado en el mapa es obligatorio cuando hay que enviar
+            if (solicitud.direccionEnvio().latitud() == null || solicitud.direccionEnvio().longitud() == null) {
+                throw new ReglaNegocioException("ENV-007", "Marca en el mapa el punto de entrega");
+            }
             if (solicitud.tarifaEnvioId() == null) {
                 throw new ConflictoEstadoException("ENV-001", "Elige un método de envío");
             }
@@ -256,7 +260,7 @@ public class CheckoutServicio {
                 orden.pasarela(), orden.tokenAcceso(), orden.fechaExpiracionPago());
     }
 
-    /** Snapshot de la dirección en las claves de la API (snake_case), tal como se guarda en JSONB. */
+    /** Snapshot de la dirección en las claves de la API (snake_case), tal como se guarda en JSONB; incluye el punto de entrega. */
     private static Map<String, Object> direccion(DireccionCheckoutRequest direccion) {
         if (direccion == null) {
             return null;
@@ -270,6 +274,10 @@ public class CheckoutServicio {
         mapa.put("estado_provincia", direccion.estadoProvincia());
         mapa.put("codigo_postal", direccion.codigoPostal());
         mapa.put("pais", direccion.pais());
+        if (direccion.latitud() != null && direccion.longitud() != null) {
+            mapa.put("latitud", direccion.latitud());
+            mapa.put("longitud", direccion.longitud());
+        }
         return mapa;
     }
 }

@@ -202,6 +202,8 @@ class PagoTest extends PruebaIntegracionBase {
         direccion.put("estado_provincia", "Lima");
         direccion.put("codigo_postal", "15001");
         direccion.put("pais", "PE");
+        direccion.put("latitud", -12.0464);
+        direccion.put("longitud", -77.0428);
         Map<String, Object> pedido = new LinkedHashMap<>();
         pedido.put("correo_cliente", "comprador@prueba.test");
         pedido.put("nombre_cliente", "Comprador");

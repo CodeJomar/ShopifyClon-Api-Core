@@ -52,6 +52,7 @@ public class SecurityConfig {
                         // Rutas públicas
                         .requestMatchers("/auth/**", "/vitrina/**", "/webhooks/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/planes").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/seguimiento/*").permitAll()
 
                         // Documentación OpenAPI / Swagger
                         .requestMatchers(

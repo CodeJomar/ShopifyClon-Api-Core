@@ -277,7 +277,7 @@ class CotizacionEnvioTest extends PruebaIntegracionBase {
         pedido.put("correo_cliente", "comprador@prueba.test");
         pedido.put("nombre_cliente", "Comprador");
         pedido.put("direccion_envio", Map.of("nombre_contacto", "Ana Perez", "direccion_linea1", "Av. Siempre Viva 123",
-                "ciudad", "Lima", "estado_provincia", "Lima", "codigo_postal", "15001", "pais", "PE"));
+                "ciudad", "Lima", "estado_provincia", "Lima", "codigo_postal", "15001", "pais", "PE", "latitud", -12.0464, "longitud", -77.0428));
         pedido.put("tarifa_envio_id", tarifa);
         pedido.put("pasarela", "MANUAL");
         pedido.put("total_esperado", totalEstimado);

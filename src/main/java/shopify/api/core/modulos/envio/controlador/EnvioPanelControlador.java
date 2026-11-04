@@ -3,6 +3,7 @@ package shopify.api.core.modulos.envio.controlador;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,8 +18,11 @@ import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.comun.seguridad.ContextoTienda;
 import shopify.api.core.comun.seguridad.Permiso;
 import shopify.api.core.comun.seguridad.RequierePermiso;
+import shopify.api.core.modulos.envio.dto.request.EntregaRequest;
 import shopify.api.core.modulos.envio.dto.request.EnvioRequest;
+import shopify.api.core.modulos.envio.dto.request.NoEntregadoRequest;
 import shopify.api.core.modulos.envio.dto.response.EnvioResponse;
+import shopify.api.core.modulos.envio.dto.response.EventoEnvioResponse;
 import shopify.api.core.modulos.envio.servicio.EnvioServicio;
 
 @Tag(name = "Panel: envíos", description = "Preparar, despachar y entregar órdenes (requiere X-Tienda-Id)")
@@ -58,11 +62,28 @@ public class EnvioPanelControlador {
         return RespuestaApi.ok(envios.despachar(contexto.tiendaId(), envioId), "Envío despachado");
     }
 
-    @Operation(summary = "Registrar la entrega (EN_TRANSITO → ENTREGADO)")
+    @Operation(summary = "Registrar la entrega (EN_TRANSITO → ENTREGADO), con foto y nota opcionales",
+            description = "El cuerpo es opcional: { foto_url (https), nota }. La foto se sube antes con POST /panel/archivos/imagenes.")
     @PostMapping("/panel/envios/{envioId}/entregar")
     @RequierePermiso(Permiso.ORDENES_GESTIONAR)
-    public ResponseEntity<RespuestaApi<EnvioResponse>> entregar(ContextoTienda contexto, @PathVariable UUID envioId) {
-        return RespuestaApi.ok(envios.entregar(contexto.tiendaId(), envioId), "Envío entregado");
+    public ResponseEntity<RespuestaApi<EnvioResponse>> entregar(
+            ContextoTienda contexto, @PathVariable UUID envioId, @Valid @RequestBody(required = false) EntregaRequest request) {
+        return RespuestaApi.ok(envios.entregar(contexto.tiendaId(), envioId, request), "Envío entregado");
+    }
+
+    @Operation(summary = "Registrar un intento de entrega fallido (el envío sigue en tránsito)")
+    @PostMapping("/panel/envios/{envioId}/no-entregado")
+    @RequierePermiso(Permiso.ORDENES_GESTIONAR)
+    public ResponseEntity<RespuestaApi<EnvioResponse>> noEntregado(
+            ContextoTienda contexto, @PathVariable UUID envioId, @Valid @RequestBody NoEntregadoRequest request) {
+        return RespuestaApi.ok(envios.noEntregado(contexto.tiendaId(), envioId, request), "Intento de entrega registrado");
+    }
+
+    @Operation(summary = "Historial de eventos del envío (el más reciente primero)")
+    @GetMapping("/panel/envios/{envioId}/eventos")
+    @RequierePermiso(Permiso.ORDENES_VER)
+    public ResponseEntity<RespuestaApi<List<EventoEnvioResponse>>> eventos(ContextoTienda contexto, @PathVariable UUID envioId) {
+        return RespuestaApi.ok(envios.eventos(contexto.tiendaId(), envioId), "Eventos del envío");
     }
 
     @Operation(summary = "Registrar la devolución (EN_TRANSITO → DEVUELTO)")
