@@ -504,7 +504,7 @@ class CheckoutTest extends PruebaIntegracionBase {
 
         JsonNode snapshot = json.readTree(jdbc.queryForObject(
                 "SELECT \"DireccionEnvio\"::text FROM \"Ordenes\" WHERE \"Id\" = ?", String.class,
-                UUID.fromString(creada.get("id").asText())));
+                UUID.fromString(creada.get("orden_id").asText())));
         assertThat(snapshot.get("latitud").decimalValue()).isEqualByComparingTo("-12.0464");
         assertThat(snapshot.get("longitud").decimalValue()).isEqualByComparingTo("-77.0428");
 
