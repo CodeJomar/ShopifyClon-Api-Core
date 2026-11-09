@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tarifas de envío · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var base = ['token', 'tiendaId'];
+  function P(metodo, ruta, extra) { var o = { metodo: metodo, ruta: ruta, tienda: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  var campos = [
+    { k: 'nombre', etiqueta: 'Nombre', valor: function () { return 'Estándar Lab ' + Lab.azar(3); } },
+    { k: 'descripcion', etiqueta: 'Descripción', valor: 'Entrega en 3 a 5 días' },
+    { k: 'precio', etiqueta: 'Precio', tipo: 'numero', valor: 5 },
+    { k: 'gratis', etiqueta: 'Envío gratis desde (vacío = nunca)', tipo: 'numero', valor: 500 },
+    { k: 'activa', etiqueta: '¿Activa?', tipo: 'bool', valor: true },
+    { k: 'orden', etiqueta: 'Orden', tipo: 'numero', valor: 1 }
+  ];
+  function conCampo(lista, k, nuevo) { return lista.map(function (x) { return x.k === k ? nuevo : x; }); }
+  function cuerpo(c) {
+    var b = { nombre: c.v.nombre, descripcion: c.v.descripcion, precio: c.v.precio, esta_activa: c.v.activa, orden: c.v.orden };
+    if (c.v.gratis !== undefined && c.v.gratis !== '' && c.v.gratis !== null) { b.monto_minimo_gratis = c.v.gratis; }
+    return b;
+  }
+
+  Lab.pagina({
+    archivo: 'tarifas.html',
+    titulo: 'Tarifas de envío',
+    descripcion: 'Opciones de envío que ofrece la tienda al comprador (nombre, precio y, opcionalmente, envío gratis desde cierto monto).',
+    avisos: [
+      '**Sin una tarifa activa, ningún carrito con envío puede pagar el checkout** (`ENV-001`). Crea al menos una antes de la página de Carrito.',
+      'Con `monto_minimo_gratis`, el envío cuesta 0 cuando `subtotal − descuento` alcanza ese monto (`ENV-002`).'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearTarifa],
+    endpoints: [
+      {
+        id: 'crear', metodo: 'POST', ruta: '/panel/envios/tarifas', titulo: 'Crear una tarifa', acceso: 'permiso ENVIOS_CONFIGURAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Crear tarifa', tipo: 'ok', campos: campos, peticion: function (c) { return P('POST', '/panel/envios/tarifas', { cuerpo: cuerpo(c) }); }, espera: { estado: 201 }, despues: function (r, c) { c.e.poner('tarifaId', r.json.datos.id); } },
+          { titulo: 'Tarifa sin monto de envío gratis', tipo: 'ok', campos: conCampo(campos, 'gratis', { k: 'gratis', etiqueta: 'Gratis desde', tipo: 'numero', valor: '' }), peticion: function (c) { return P('POST', '/panel/envios/tarifas', { cuerpo: cuerpo(c) }); }, espera: { estado: 201 } },
+          { titulo: 'Precio negativo', tipo: 'validacion', campos: conCampo(campos, 'precio', { k: 'precio', etiqueta: 'Precio', tipo: 'numero', valor: -1 }), peticion: function (c) { return P('POST', '/panel/envios/tarifas', { cuerpo: cuerpo(c) }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'precio' } },
+          { titulo: 'Sin nombre ni precio', tipo: 'validacion', peticion: function () { return P('POST', '/panel/envios/tarifas', { cuerpo: {} }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'nombre' } },
+          { titulo: 'Sin X-Tienda-Id', tipo: 'validacion', campos: campos, peticion: function (c) { return { metodo: 'POST', ruta: '/panel/envios/tarifas', cuerpo: cuerpo(c) }; }, espera: { estado: 400, codigo: 'SEG-001' } }
+        ]
+      },
+      {
+        id: 'listar', metodo: 'GET', ruta: '/panel/envios/tarifas', titulo: 'Listar las tarifas', acceso: 'permiso ENVIOS_CONFIGURAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Todas, activas o no.',
+        casos: [{ titulo: 'Listar', tipo: 'ok', peticion: function () { return P('GET', '/panel/envios/tarifas'); }, espera: { estado: 200 } }]
+      },
+      {
+        id: 'editar', metodo: 'PUT', ruta: '/panel/envios/tarifas/{id}', titulo: 'Editar una tarifa', acceso: 'permiso ENVIOS_CONFIGURAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Cambiar el precio', tipo: 'ok', necesita: base.concat(['tarifaId']), campos: campos, peticion: function (c) { return P('PUT', '/panel/envios/tarifas/' + c.e.obtener('tarifaId'), { cuerpo: cuerpo(c) }); }, espera: { estado: 200 } },
+          { titulo: 'Tarifa inexistente', tipo: 'error', campos: campos, peticion: function (c) { return P('PUT', '/panel/envios/tarifas/' + inexistente, { cuerpo: cuerpo(c) }); }, espera: { estado: 404, codigo: 'ENV-404' } },
+          { titulo: 'Monto gratis negativo', tipo: 'validacion', campos: conCampo(campos, 'gratis', { k: 'gratis', etiqueta: 'Gratis desde', tipo: 'numero', valor: -10 }), peticion: function (c) { return P('PUT', '/panel/envios/tarifas/' + inexistente, { cuerpo: cuerpo(c) }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'monto_minimo_gratis' } }
+        ]
+      },
+      {
+        id: 'vitrina', metodo: 'GET', ruta: '/vitrina/{subdominio}/tarifas-envio', titulo: 'Tarifas para el comprador', acceso: 'público', necesita: ['subdominio'],
+        sirve: 'Solo las tarifas **activas**; de aquí sale el `tarifa_envio_id` del carrito y el checkout.',
+        casos: [
+          { titulo: 'Listar', tipo: 'ok', peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/tarifas-envio', sesion: false }; }, espera: { estado: 200 },
+            despues: function (r, c) { var l = r.json.datos || []; if (l.length && !c.e.obtener('tarifaId')) { c.e.poner('tarifaId', l[0].id); } } },
+          { titulo: 'Tienda inexistente', tipo: 'error', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/vitrina/no-existe-' + Lab.azar(6) + '/tarifas-envio', sesion: false }; }, espera: { estado: 404, codigo: 'TIE-404' } }
+        ]
+      },
+      {
+        id: 'borrar', metodo: 'DELETE', ruta: '/panel/envios/tarifas/{id}', titulo: 'Eliminar una tarifa', acceso: 'permiso ENVIOS_CONFIGURAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Eliminación lógica. Las órdenes ya hechas conservan el precio que pagaron.',
+        casos: [
+          { titulo: 'Eliminar la tarifa del estado', tipo: 'ok', manual: true, necesita: base.concat(['tarifaId']), peticion: function (c) { return P('DELETE', '/panel/envios/tarifas/' + c.e.obtener('tarifaId')); }, espera: { estado: 200 }, despues: function (r, c) { c.e.poner('tarifaId', ''); } },
+          { titulo: 'Tarifa inexistente', tipo: 'error', peticion: function () { return P('DELETE', '/panel/envios/tarifas/' + inexistente); }, espera: { estado: 404, codigo: 'ENV-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

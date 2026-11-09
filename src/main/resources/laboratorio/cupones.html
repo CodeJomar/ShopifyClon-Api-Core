@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cupones · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var base = ['token', 'tiendaId'];
+  function P(metodo, ruta, extra) { var o = { metodo: metodo, ruta: ruta, tienda: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  var camposCupon = [
+    { k: 'codigo', etiqueta: 'Código (A-Z, 0-9, _ y -)', valor: function () { return 'LAB' + Lab.azar(5).toUpperCase(); }, ayuda: 'Se guarda en mayúsculas.' },
+    { k: 'tipo', etiqueta: 'Tipo de descuento', tipo: 'select', opciones: ['PORCENTAJE', 'MONTO_FIJO', 'ENVIO_GRATIS'] },
+    { k: 'valor', etiqueta: 'Valor', tipo: 'numero', valor: 10, ayuda: 'PORCENTAJE: 0–100 · MONTO_FIJO: > 0 · ENVIO_GRATIS: debe ser 0.' },
+    { k: 'minimo', etiqueta: 'Monto mínimo de compra', tipo: 'numero', valor: 0 },
+    { k: 'limite', etiqueta: 'Límite de usos (vacío = sin límite)', tipo: 'numero', valor: '' }
+  ];
+  function conCampo(lista, k, nuevo) { return lista.map(function (x) { return x.k === k ? nuevo : x; }); }
+  function cuerpo(c, extra) {
+    var b = { codigo: c.v.codigo, tipo_descuento: c.v.tipo, valor_descuento: c.v.valor, monto_minimo_compra: c.v.minimo };
+    if (c.v.limite !== undefined && c.v.limite !== '' && c.v.limite !== null) { b.limite_usos_total = c.v.limite; }
+    for (var k in (extra || {})) { b[k] = extra[k]; }
+    return b;
+  }
+  function guardar(r, c) { c.e.poner('cuponId', r.json.datos.id); c.e.poner('cuponCodigo', r.json.datos.codigo); }
+
+  Lab.pagina({
+    archivo: 'cupones.html',
+    titulo: 'Cupones',
+    descripcion: 'Descuentos de la tienda: porcentaje, monto fijo o envío gratis, con monto mínimo, límite de usos y vigencia. El comprador los aplica en el carrito.',
+    avisos: [
+      'El cupón guarda su código en **mayúsculas** y es único por tienda. Tras crear uno, el código queda en el estado (`cuponCodigo`) para usarlo en la página de Carrito.',
+      'Un cupón con usos ya registrados no permite cambiar tipo ni valor.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda],
+    endpoints: [
+      {
+        id: 'crear', metodo: 'POST', ruta: '/panel/cupones', titulo: 'Crear un cupón', acceso: 'permiso CUPONES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Crea el cupón. `esta_activo` queda en true y `fecha_inicio` en ahora si no las mandas.',
+        notas: ['`PORCENTAJE`: valor de 0 a 100. `MONTO_FIJO`: valor > 0. `ENVIO_GRATIS`: valor **exactamente 0**.', 'La fecha de fin debe ser posterior a la de inicio (`CUP-009`).'],
+        casos: [
+          { titulo: 'Cupón del 10 %', tipo: 'ok', campos: camposCupon, peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c) }); }, espera: { estado: 201 }, despues: guardar },
+          { titulo: 'Monto fijo de 5', tipo: 'ok', campos: conCampo(conCampo(camposCupon, 'tipo', { k: 'tipo', etiqueta: 'Tipo', tipo: 'select', opciones: ['MONTO_FIJO', 'PORCENTAJE', 'ENVIO_GRATIS'] }), 'valor', { k: 'valor', etiqueta: 'Valor', tipo: 'numero', valor: 5 }),
+            peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c) }); }, espera: { estado: 201 } },
+          { titulo: 'Envío gratis', tipo: 'ok', campos: conCampo(conCampo(camposCupon, 'tipo', { k: 'tipo', etiqueta: 'Tipo', tipo: 'select', opciones: ['ENVIO_GRATIS'] }), 'valor', { k: 'valor', etiqueta: 'Valor', tipo: 'numero', valor: 0 }),
+            peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c) }); }, espera: { estado: 201 } },
+          { titulo: 'Código repetido', tipo: 'error', necesita: base.concat(['cuponCodigo']), campos: conCampo(camposCupon, 'codigo', { k: 'codigo', etiqueta: 'Código', valor: function (e) { return e.obtener('cuponCodigo') || ''; } }),
+            peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c) }); }, espera: { estado: 422, codigo: 'CUP-001' } },
+          { titulo: 'Porcentaje mayor a 100', tipo: 'error', campos: conCampo(camposCupon, 'valor', { k: 'valor', etiqueta: 'Valor', tipo: 'numero', valor: 150 }),
+            peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c) }); }, espera: { estado: 422 } },
+          { titulo: 'Envío gratis con valor distinto de 0', tipo: 'error', campos: conCampo(conCampo(camposCupon, 'tipo', { k: 'tipo', etiqueta: 'Tipo', tipo: 'select', opciones: ['ENVIO_GRATIS'] }), 'valor', { k: 'valor', etiqueta: 'Valor', tipo: 'numero', valor: 7 }),
+            peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c) }); }, espera: { estado: 422 } },
+          { titulo: 'Fecha de fin anterior al inicio', tipo: 'error', campos: camposCupon, peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c, { fecha_inicio: Lab.hora(5), fecha_fin: Lab.hora(1) }) }); }, espera: { estado: 422, codigo: 'CUP-009' } },
+          { titulo: 'Código con espacios', tipo: 'validacion', campos: conCampo(camposCupon, 'codigo', { k: 'codigo', etiqueta: 'Código', valor: 'CON ESPACIOS' }), peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c) }); }, espera: { estado: 422 } },
+          { titulo: 'Faltan campos', tipo: 'validacion', peticion: function () { return P('POST', '/panel/cupones', { cuerpo: {} }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'codigo' } },
+          { titulo: 'Límite de usos en 0', tipo: 'validacion', campos: conCampo(camposCupon, 'limite', { k: 'limite', etiqueta: 'Límite de usos', tipo: 'numero', valor: 0 }), peticion: function (c) { return P('POST', '/panel/cupones', { cuerpo: cuerpo(c) }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'limite_usos_total' } }
+        ]
+      },
+      {
+        id: 'listar', metodo: 'GET', ruta: '/panel/cupones', titulo: 'Listar cupones', acceso: 'permiso CUPONES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Paginado (`datos.datos`). Filtros: `texto` (código) y `activo`.',
+        casos: [
+          { titulo: 'Todos', tipo: 'ok', peticion: function () { return P('GET', '/panel/cupones', { query: { pagina: 0 } }); }, espera: { estado: 200 } },
+          { titulo: 'Solo activos que contienen «LAB»', tipo: 'ok', peticion: function () { return P('GET', '/panel/cupones', { query: { texto: 'LAB', activo: true } }); }, espera: { estado: 200 } }
+        ]
+      },
+      {
+        id: 'ver', metodo: 'GET', ruta: '/panel/cupones/{id}', titulo: 'Ver un cupón', acceso: 'permiso CUPONES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Ver el cupón creado', tipo: 'ok', necesita: base.concat(['cuponId']), peticion: function (c) { return P('GET', '/panel/cupones/' + c.e.obtener('cuponId')); }, espera: { estado: 200 } },
+          { titulo: 'Cupón inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/cupones/' + inexistente); }, espera: { estado: 404, codigo: 'CUP-404' } }
+        ]
+      },
+      {
+        id: 'editar', metodo: 'PUT', ruta: '/panel/cupones/{id}', titulo: 'Editar un cupón', acceso: 'permiso CUPONES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Reemplaza los datos del cupón. `fecha_inicio` y `esta_activo` ausentes conservan su valor.',
+        casos: [
+          { titulo: 'Subir el descuento a 15 %', tipo: 'ok', necesita: base.concat(['cuponId', 'cuponCodigo']),
+            peticion: function (c) { return P('PUT', '/panel/cupones/' + c.e.obtener('cuponId'), { cuerpo: { codigo: c.e.obtener('cuponCodigo'), tipo_descuento: 'PORCENTAJE', valor_descuento: 15, monto_minimo_compra: 0 } }); }, espera: { estado: 200 } },
+          { titulo: 'Desactivar el cupón', tipo: 'ok', necesita: base.concat(['cuponId', 'cuponCodigo']),
+            peticion: function (c) { return P('PUT', '/panel/cupones/' + c.e.obtener('cuponId'), { cuerpo: { codigo: c.e.obtener('cuponCodigo'), tipo_descuento: 'PORCENTAJE', valor_descuento: 15, esta_activo: false } }); }, espera: { estado: 200 } },
+          { titulo: 'Reactivar el cupón', tipo: 'ok', necesita: base.concat(['cuponId', 'cuponCodigo']),
+            peticion: function (c) { return P('PUT', '/panel/cupones/' + c.e.obtener('cuponId'), { cuerpo: { codigo: c.e.obtener('cuponCodigo'), tipo_descuento: 'PORCENTAJE', valor_descuento: 15, esta_activo: true } }); }, espera: { estado: 200 } },
+          { titulo: 'Cupón inexistente', tipo: 'error', peticion: function () { return P('PUT', '/panel/cupones/' + inexistente, { cuerpo: { codigo: 'XXX', tipo_descuento: 'PORCENTAJE', valor_descuento: 5 } }); }, espera: { estado: 404, codigo: 'CUP-404' } },
+          { titulo: 'Valor negativo', tipo: 'validacion', peticion: function () { return P('PUT', '/panel/cupones/' + inexistente, { cuerpo: { codigo: 'XXX', tipo_descuento: 'PORCENTAJE', valor_descuento: -1 } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'valor_descuento' } }
+        ]
+      },
+      {
+        id: 'borrar', metodo: 'DELETE', ruta: '/panel/cupones/{id}', titulo: 'Eliminar un cupón', acceso: 'permiso CUPONES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Eliminación lógica: el código deja de aceptarse en el carrito.',
+        casos: [
+          { titulo: 'Eliminar el cupón creado', tipo: 'ok', manual: true, necesita: base.concat(['cuponId']), peticion: function (c) { return P('DELETE', '/panel/cupones/' + c.e.obtener('cuponId')); }, espera: { estado: 200 }, despues: function (r, c) { c.e.poner('cuponId', ''); c.e.poner('cuponCodigo', ''); } },
+          { titulo: 'Cupón inexistente', tipo: 'error', peticion: function () { return P('DELETE', '/panel/cupones/' + inexistente); }, espera: { estado: 404, codigo: 'CUP-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cuenta y sesión · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var CLAVE_LAB = 'Laboratorio2026';
+  var correoEstado = function (e) { return e.obtener('correo') || ''; };
+  var correoPendiente = function (e) { return e.obtener('correoPendiente') || ''; };
+  var campoCorreo = function (valor) { return { k: 'correo', etiqueta: 'Correo electrónico', valor: valor }; };
+  var direccionBase = function (c) {
+    return { nombre_contacto: c.v.nombre_contacto, telefono: '999888777', direccion_linea1: c.v.direccion_linea1, ciudad: 'Lima',
+      estado_provincia: 'Lima', codigo_postal: '15001', pais: 'PE', latitud: c.v.latitud, longitud: c.v.longitud };
+  };
+  var camposDireccion = [
+    { k: 'nombre_contacto', etiqueta: 'Nombre de contacto', valor: 'Ana Pérez' },
+    { k: 'direccion_linea1', etiqueta: 'Dirección', valor: 'Av. Siempre Viva 742' },
+    { k: 'latitud', etiqueta: 'Latitud (−90 a 90)', tipo: 'numero', valor: -12.0464 },
+    { k: 'longitud', etiqueta: 'Longitud (−180 a 180)', tipo: 'numero', valor: -77.0428 }
+  ];
+  var idInexistente = '00000000-0000-0000-0000-000000000000';
+
+  Lab.pagina({
+    archivo: 'cuenta.html',
+    titulo: 'Cuenta y sesión',
+    descripcion: 'Registro, activación con código, inicio de sesión, recuperación de clave, perfil y libreta de direcciones del usuario. Aquí empieza todo: el login deja el token de sesión que usan los demás módulos.',
+    avisos: [
+      'Las cuentas nuevas **no se pueden activar desde aquí solas**: el código de 6 dígitos solo llega por correo. Para probar el flujo completo registra con un correo tuyo; con un correo falso el aviso rebota a la cuenta SMTP del sistema. Para el resto del laboratorio inicia sesión con una cuenta ya activa (ver `docs/orquestacion-frontend/datos-de-prueba.md`).',
+      'Los endpoints `/auth/*` tienen límite de **10 peticiones por minuto por IP**. Si ves 429 espera un minuto.'
+    ],
+    recetas: [
+      { titulo: 'Cerrar sesión (olvidar el token)', descripcion: 'Quita el token, el usuario y la tienda del estado.', ejecutar: function (c) {
+        ['token', 'correo', 'nombres', 'tiendaId', 'subdominio', 'rolTienda', 'esAdminPlataforma'].forEach(function (k) { c.e.poner(k, ''); });
+        c.log('Sesión olvidada en este navegador (el token sigue siendo válido hasta que expire).');
+      } }
+    ],
+    endpoints: [
+      {
+        id: 'registro', metodo: 'POST', ruta: '/auth/registro', titulo: 'Registrar una cuenta', acceso: 'público', cabeceras: 'ninguna',
+        sirve: 'Crea la cuenta sin activar y envía por correo un código de 6 dígitos (vence en 24 h).',
+        notas: ['La contraseña necesita 8–72 caracteres con al menos una letra y un número.', 'El correo se guarda en minúsculas; uno repetido (sin distinguir mayúsculas) da `USR-001`.', 'No acepta rol ni bandera de administrador: aunque la mandes, se ignora.'],
+        casos: [
+          { titulo: 'Registro válido', tipo: 'ok', descripcion: 'Crea la cuenta. Queda sin activar y se guarda como «cuenta pendiente» para probar la activación.',
+            campos: [{ k: 'correo', etiqueta: 'Correo (usa uno tuyo para recibir el código)', valor: function () { return 'lab-' + Lab.azar(6) + '@laboratorio.test'; } },
+              { k: 'contrasena', etiqueta: 'Contraseña', valor: CLAVE_LAB, ayuda: 'Se usa también en el caso «cuenta sin activar» del login.' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/registro', sesion: false, cuerpo: { correo_electronico: c.v.correo, contrasena: c.v.contrasena, nombres: 'Laboratorio', apellidos: 'Pruebas' } }; },
+            espera: { estado: 201 }, despues: function (r, c) { c.e.poner('correoPendiente', c.v.correo); } },
+          { titulo: 'Correo ya registrado', tipo: 'error', descripcion: 'Intenta registrar el correo de la cuenta pendiente (o el de tu sesión) con otras mayúsculas.',
+            necesita: [], campos: [{ k: 'correo', etiqueta: 'Correo existente', valor: function (e) { var x = e.obtener('correoPendiente') || e.obtener('correo') || 'ya-existe@laboratorio.test'; return x.toUpperCase(); } }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/registro', sesion: false, cuerpo: { correo_electronico: c.v.correo, contrasena: CLAVE_LAB, nombres: 'Laboratorio', apellidos: 'Pruebas' } }; },
+            espera: { estado: 422, codigo: 'USR-001' } },
+          { titulo: 'Contraseña sin número', tipo: 'validacion', descripcion: 'USR-002: la contraseña exige letra y número.',
+            campos: [{ k: 'contrasena', etiqueta: 'Contraseña', valor: 'abcdefgh' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/registro', sesion: false, cuerpo: { correo_electronico: 'x-' + Lab.azar(5) + '@laboratorio.test', contrasena: c.v.contrasena, nombres: 'A', apellidos: 'B' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'contrasena' } },
+          { titulo: 'Correo con formato inválido', tipo: 'validacion',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/registro', sesion: false, cuerpo: { correo_electronico: 'esto-no-es-un-correo', contrasena: CLAVE_LAB, nombres: 'A', apellidos: 'B' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'correo_electronico' } },
+          { titulo: 'Cuerpo vacío', tipo: 'validacion', descripcion: 'Faltan todos los campos obligatorios: la respuesta lista cada campo con su mensaje.',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/registro', sesion: false, cuerpo: {} }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'nombres' } },
+          { titulo: 'JSON roto', tipo: 'validacion', descripcion: 'El cuerpo no es JSON válido.',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/registro', sesion: false, cuerpo: '{esto no es json' }; },
+            espera: { estado: 400, codigo: 'VAL-002' } }
+        ]
+      },
+      {
+        id: 'activar', metodo: 'POST', ruta: '/auth/activar', titulo: 'Activar la cuenta con el código', acceso: 'público',
+        sirve: 'Valida el código de 6 dígitos recibido por correo y deja la cuenta activa.',
+        notas: ['5 intentos fallidos agotan el código: hay que pedir otro con `/auth/reenviar-activacion`.', 'Activar una cuenta que ya estaba activa responde 200 sin hacer nada.'],
+        casos: [
+          { titulo: 'Activar con el código del correo', tipo: 'ok', manual: true, descripcion: 'Pega el código que te llegó. Solo funciona si registraste con un correo tuyo.',
+            campos: [campoCorreo(correoPendiente), { k: 'codigo', etiqueta: 'Código de 6 dígitos', valor: '' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/activar', sesion: false, cuerpo: { correo_electronico: c.v.correo, codigo: c.v.codigo } }; },
+            espera: { estado: 200 } },
+          { titulo: 'Código incorrecto', tipo: 'error', descripcion: 'Cuenta un intento fallido (de 5) sobre el código vigente.', necesita: ['correoPendiente'],
+            campos: [campoCorreo(correoPendiente), { k: 'codigo', etiqueta: 'Código', valor: '000000' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/activar', sesion: false, cuerpo: { correo_electronico: c.v.correo, codigo: c.v.codigo } }; },
+            espera: { estado: 422, codigo: 'USR-012' } },
+          { titulo: 'Correo que no existe', tipo: 'seguridad', descripcion: 'Responde lo mismo que un código malo: no revela si la cuenta existe.',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/activar', sesion: false, cuerpo: { correo_electronico: 'nadie-' + Lab.azar(6) + '@laboratorio.test', codigo: '123456' } }; },
+            espera: { estado: 422, codigo: 'USR-012' } },
+          { titulo: 'Código con letras', tipo: 'validacion',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/activar', sesion: false, cuerpo: { correo_electronico: 'a@laboratorio.test', codigo: 'abc12x' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'codigo' } }
+        ]
+      },
+      {
+        id: 'reenviar', metodo: 'POST', ruta: '/auth/reenviar-activacion', titulo: 'Reenviar el código de activación', acceso: 'público',
+        sirve: 'Genera un código nuevo e invalida el anterior. Siempre responde 200.',
+        notas: ['Responde igual exista o no la cuenta, para no revelar qué correos están registrados.'],
+        casos: [
+          { titulo: 'Reenviar a la cuenta pendiente', tipo: 'ok', necesita: ['correoPendiente'], campos: [campoCorreo(correoPendiente)],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/reenviar-activacion', sesion: false, cuerpo: { correo_electronico: c.v.correo } }; }, espera: { estado: 200 } },
+          { titulo: 'Correo que no existe', tipo: 'seguridad', descripcion: 'También 200, con el mismo mensaje.',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/reenviar-activacion', sesion: false, cuerpo: { correo_electronico: 'nadie-' + Lab.azar(6) + '@laboratorio.test' } }; }, espera: { estado: 200 } },
+          { titulo: 'Correo inválido', tipo: 'validacion',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/reenviar-activacion', sesion: false, cuerpo: { correo_electronico: 'sin-arroba' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'correo_electronico' } }
+        ]
+      },
+      {
+        id: 'login', metodo: 'POST', ruta: '/auth/login', titulo: 'Iniciar sesión', acceso: 'público',
+        sirve: 'Devuelve el token JWT, el perfil y las tiendas donde participas (de ahí sale el X-Tienda-Id).',
+        notas: ['El token se guarda solo en el estado del laboratorio; los demás módulos lo usan.', 'La contraseña no se guarda en disco: queda solo mientras la pestaña esté abierta.', 'Contraseña correcta con cuenta sin activar da 409 `USR-003`; correo o clave malos dan siempre el mismo 401 `USR-004`.'],
+        casos: [
+          { titulo: 'Login correcto', tipo: 'ok', manual: true, descripcion: 'Escribe la contraseña de tu cuenta. Guarda token, usuario y la primera tienda en el estado.',
+            campos: [campoCorreo(correoEstado), { k: 'contrasena', etiqueta: 'Contraseña', tipo: 'password', valor: function (e) { return e.recuperarMemoria('contrasena'); } }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: c.v.correo, contrasena: c.v.contrasena } }; },
+            espera: { estado: 200 },
+            despues: function (r, c) {
+              var d = r.json.datos;
+              c.e.poner('token', d.token); c.e.poner('usuarioId', d.usuario.id); c.e.poner('correo', d.usuario.correo_electronico); c.e.poner('nombres', d.usuario.nombres);
+              c.e.poner('esAdminPlataforma', d.usuario.es_administrador_plataforma ? 'sí' : '');
+              c.e.ponerSoloMemoria('contrasena', c.v.contrasena);
+              if (d.tiendas && d.tiendas.length && !c.e.obtener('tiendaId')) { c.e.poner('tiendaId', d.tiendas[0].tienda_id); c.e.poner('subdominio', d.tiendas[0].subdominio); c.e.poner('rolTienda', d.tiendas[0].rol); }
+            } },
+          { titulo: 'Contraseña incorrecta', tipo: 'error', campos: [campoCorreo(correoEstado)],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: c.v.correo || 'x@laboratorio.test', contrasena: 'Incorrecta' + Lab.azar(4) + '1' } }; },
+            espera: { estado: 401, codigo: 'USR-004' } },
+          { titulo: 'Correo que no existe', tipo: 'seguridad', descripcion: 'Mismo error y mismo mensaje que la contraseña incorrecta.',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: 'nadie-' + Lab.azar(6) + '@laboratorio.test', contrasena: 'Incorrecta1' } }; },
+            espera: { estado: 401, codigo: 'USR-004' } },
+          { titulo: 'Cuenta sin activar (clave correcta)', tipo: 'error', necesita: ['correoPendiente'], descripcion: 'Usa la cuenta creada en «Registro válido» (si aún no la activaste).',
+            campos: [campoCorreo(correoPendiente)],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: c.v.correo, contrasena: CLAVE_LAB } }; },
+            espera: { estado: 409, codigo: 'USR-003' } },
+          { titulo: 'Campos vacíos', tipo: 'validacion',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: '', contrasena: '' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'correo_electronico' } },
+          { titulo: 'Superar el límite de intentos', tipo: 'seguridad', manual: true,
+            descripcion: 'Hace 10 logins fallidos y luego el 11.º: responde 429 con Retry-After. Te bloquea el login desde tu IP durante un minuto.',
+            antes: function (c) {
+              var lista = []; for (var i = 0; i < 10; i++) { lista.push(Lab.pedir({ metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: 'limite@laboratorio.test', contrasena: 'Incorrecta1' } })); }
+              return Promise.all(lista);
+            },
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: 'limite@laboratorio.test', contrasena: 'Incorrecta1' } }; },
+            espera: { estado: 429, codigo: 'GEN-429' } }
+        ]
+      },
+      {
+        id: 'recuperar-solicitar', metodo: 'POST', ruta: '/auth/recuperar-clave/solicitar', titulo: 'Pedir un código para recuperar la clave', acceso: 'público',
+        sirve: 'Envía un código de 6 dígitos (vence en 30 min) al correo si la cuenta existe.',
+        notas: ['Siempre responde 200 con el mismo mensaje: no revela qué cuentas existen.'],
+        casos: [
+          { titulo: 'Correo de una cuenta', tipo: 'ok', descripcion: 'Si pones un correo real tuyo recibirás el código.', campos: [campoCorreo(correoEstado)],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/recuperar-clave/solicitar', sesion: false, cuerpo: { correo_electronico: c.v.correo || 'x@laboratorio.test' } }; }, espera: { estado: 200 } },
+          { titulo: 'Correo que no existe', tipo: 'seguridad',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/recuperar-clave/solicitar', sesion: false, cuerpo: { correo_electronico: 'nadie-' + Lab.azar(6) + '@laboratorio.test' } }; }, espera: { estado: 200 } },
+          { titulo: 'Correo inválido', tipo: 'validacion',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/recuperar-clave/solicitar', sesion: false, cuerpo: { correo_electronico: 'nada' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'correo_electronico' } }
+        ]
+      },
+      {
+        id: 'recuperar-confirmar', metodo: 'POST', ruta: '/auth/recuperar-clave/confirmar', titulo: 'Restablecer la clave con el código', acceso: 'público',
+        sirve: 'Cambia la contraseña con el código recibido. No activa una cuenta que estaba sin activar.',
+        casos: [
+          { titulo: 'Restablecer con el código del correo', tipo: 'ok', manual: true, descripcion: 'Cambia de verdad la contraseña de esa cuenta.',
+            campos: [campoCorreo(correoEstado), { k: 'codigo', etiqueta: 'Código', valor: '' }, { k: 'nueva', etiqueta: 'Contraseña nueva', valor: 'NuevaClave2026' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/recuperar-clave/confirmar', sesion: false, cuerpo: { correo_electronico: c.v.correo, codigo: c.v.codigo, contrasena_nueva: c.v.nueva } }; },
+            espera: { estado: 200 } },
+          { titulo: 'Código inválido', tipo: 'error', campos: [campoCorreo(correoEstado)],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/recuperar-clave/confirmar', sesion: false, cuerpo: { correo_electronico: c.v.correo || 'x@laboratorio.test', codigo: '000000', contrasena_nueva: 'NuevaClave2026' } }; },
+            espera: { estado: 422, codigo: 'USR-012' } },
+          { titulo: 'Contraseña nueva débil', tipo: 'validacion',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/recuperar-clave/confirmar', sesion: false, cuerpo: { correo_electronico: 'a@laboratorio.test', codigo: '123456', contrasena_nueva: 'corta' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'contrasena_nueva' } }
+        ]
+      },
+      {
+        id: 'perfil-ver', metodo: 'GET', ruta: '/cuenta/perfil', titulo: 'Ver mi perfil', acceso: 'sesión',
+        sirve: 'Devuelve los datos del usuario del token.', necesita: ['token'],
+        casos: [
+          { titulo: 'Con sesión', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/cuenta/perfil' }; }, espera: { estado: 200 } },
+          { titulo: 'Sin token', tipo: 'seguridad', necesita: [], descripcion: 'Toda ruta protegida responde 401 SEG-007 sin sesión.',
+            peticion: function () { return { metodo: 'GET', ruta: '/cuenta/perfil', sesion: false }; }, espera: { estado: 401, codigo: 'SEG-007' } },
+          { titulo: 'Token inválido', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/cuenta/perfil', token: 'esto.no.es.un.jwt' }; },
+            espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'perfil-editar', metodo: 'PUT', ruta: '/cuenta/perfil', titulo: 'Editar mi perfil', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Cambia nombres, apellidos y teléfono.',
+        notas: ['El teléfono admite solo números, espacios y + ( ) -; si lo mandas debe cumplir ese formato.', 'Intentar mandar `es_administrador_plataforma` no hace nada: esa bandera solo se cambia en la base de datos.'],
+        casos: [
+          { titulo: 'Cambiar datos', tipo: 'ok', campos: [{ k: 'nombres', etiqueta: 'Nombres', valor: 'Laboratorio' }, { k: 'apellidos', etiqueta: 'Apellidos', valor: 'Pruebas' }, { k: 'telefono', etiqueta: 'Teléfono', valor: '+51 999 888 777' }],
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/cuenta/perfil', cuerpo: { nombres: c.v.nombres, apellidos: c.v.apellidos, telefono: c.v.telefono } }; }, espera: { estado: 200 } },
+          { titulo: 'Teléfono con letras', tipo: 'validacion',
+            peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/perfil', cuerpo: { nombres: 'A', apellidos: 'B', telefono: 'abc' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'telefono' } },
+          { titulo: 'Nombres vacíos', tipo: 'validacion',
+            peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/perfil', cuerpo: { nombres: '', apellidos: 'B' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'nombres' } },
+          { titulo: 'Intentar volverme administrador', tipo: 'seguridad', descripcion: 'El campo se ignora: la respuesta no cambia la bandera.',
+            peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/perfil', cuerpo: { nombres: 'Laboratorio', apellidos: 'Pruebas', es_administrador_plataforma: true } }; },
+            espera: { estado: 200, verifica: function (r) { return (r.json.datos.es_administrador_plataforma === true && !Lab.estado.obtener('esAdminPlataforma')) ? 'La bandera de administrador cambió: ¡falla de seguridad!' : ''; } } }
+        ]
+      },
+      {
+        id: 'contrasena', metodo: 'PUT', ruta: '/cuenta/contrasena', titulo: 'Cambiar mi contraseña', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Exige la contraseña actual; la nueva debe ser distinta.',
+        casos: [
+          { titulo: 'Contraseña actual incorrecta', tipo: 'error', peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/contrasena', cuerpo: { contrasena_actual: 'Equivocada9', contrasena_nueva: 'OtraClave2026' } }; },
+            espera: { estado: 422, codigo: 'USR-010' } },
+          { titulo: 'Nueva igual a la actual', tipo: 'error', manual: true, descripcion: 'Necesitas haber iniciado sesión aquí en esta pestaña (para conocer la contraseña actual).',
+            campos: [{ k: 'actual', etiqueta: 'Contraseña actual', tipo: 'password', valor: function (e) { return e.recuperarMemoria('contrasena'); } }],
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/cuenta/contrasena', cuerpo: { contrasena_actual: c.v.actual, contrasena_nueva: c.v.actual } }; },
+            espera: { estado: 422, codigo: 'USR-010' } },
+          { titulo: 'Nueva contraseña débil', tipo: 'validacion', peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/contrasena', cuerpo: { contrasena_actual: 'Equivocada9', contrasena_nueva: '1234567' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'contrasena_nueva' } },
+          { titulo: 'Cambiar la contraseña de verdad', tipo: 'ok', manual: true, descripcion: 'Cambia la contraseña de la cuenta con la que iniciaste sesión.',
+            campos: [{ k: 'actual', etiqueta: 'Actual', tipo: 'password', valor: function (e) { return e.recuperarMemoria('contrasena'); } }, { k: 'nueva', etiqueta: 'Nueva', valor: 'NuevaClave2026' }],
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/cuenta/contrasena', cuerpo: { contrasena_actual: c.v.actual, contrasena_nueva: c.v.nueva } }; },
+            espera: { estado: 200 }, despues: function (r, c) { c.e.ponerSoloMemoria('contrasena', c.v.nueva); } }
+        ]
+      },
+      {
+        id: 'dir-listar', metodo: 'GET', ruta: '/cuenta/direcciones', titulo: 'Listar mis direcciones', acceso: 'sesión', necesita: ['token'],
+        sirve: 'La dirección principal sale primero, luego las más recientes.',
+        casos: [{ titulo: 'Listar', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/cuenta/direcciones' }; }, espera: { estado: 200 } }]
+      },
+      {
+        id: 'dir-crear', metodo: 'POST', ruta: '/cuenta/direcciones', titulo: 'Agregar una dirección', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Guarda una dirección en la libreta. La primera queda como principal.',
+        notas: ['`latitud` y `longitud` son opcionales aquí, pero el checkout las exige (ENV-007) cuando hay envío.', 'Máximo 20 direcciones por usuario (`USR-011`).'],
+        casos: [
+          { titulo: 'Con punto en el mapa', tipo: 'ok', campos: camposDireccion,
+            peticion: function (c) { return { metodo: 'POST', ruta: '/cuenta/direcciones', cuerpo: direccionBase(c) }; }, espera: { estado: 201 },
+            despues: function (r, c) { c.e.poner('direccionId', r.json.datos.id); } },
+          { titulo: 'Faltan campos obligatorios', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/cuenta/direcciones', cuerpo: { telefono: '123456' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'nombre_contacto' } },
+          { titulo: 'Latitud fuera de rango', tipo: 'validacion', campos: camposDireccion.map(function (x) { return x.k === 'latitud' ? { k: 'latitud', etiqueta: 'Latitud', tipo: 'numero', valor: 95 } : x; }),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/cuenta/direcciones', cuerpo: direccionBase(c) }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'latitud' } }
+        ]
+      },
+      {
+        id: 'dir-editar', metodo: 'PUT', ruta: '/cuenta/direcciones/{id}', titulo: 'Editar una dirección', acceso: 'sesión', necesita: ['token', 'direccionId'],
+        sirve: 'Cambia los datos de una dirección tuya (no cambia cuál es la principal).',
+        casos: [
+          { titulo: 'Editar la última creada', tipo: 'ok', campos: camposDireccion,
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/cuenta/direcciones/' + c.e.obtener('direccionId'), cuerpo: direccionBase(c) }; }, espera: { estado: 200 } },
+          { titulo: 'Dirección que no existe o es de otro usuario', tipo: 'seguridad', necesita: ['token'], campos: camposDireccion,
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/cuenta/direcciones/' + idInexistente, cuerpo: direccionBase(c) }; }, espera: { estado: 404, codigo: 'USR-404' } }
+        ]
+      },
+      {
+        id: 'dir-principal', metodo: 'POST', ruta: '/cuenta/direcciones/{id}/principal', titulo: 'Marcar como principal', acceso: 'sesión', necesita: ['token', 'direccionId'],
+        sirve: 'Desmarca la principal anterior y marca esta.',
+        casos: [
+          { titulo: 'Marcar la última creada', tipo: 'ok', peticion: function (c) { return { metodo: 'POST', ruta: '/cuenta/direcciones/' + c.e.obtener('direccionId') + '/principal' }; }, espera: { estado: 200 } },
+          { titulo: 'Dirección ajena o inexistente', tipo: 'seguridad', necesita: ['token'], peticion: function () { return { metodo: 'POST', ruta: '/cuenta/direcciones/' + idInexistente + '/principal' }; }, espera: { estado: 404, codigo: 'USR-404' } }
+        ]
+      },
+      {
+        id: 'dir-borrar', metodo: 'DELETE', ruta: '/cuenta/direcciones/{id}', titulo: 'Eliminar una dirección', acceso: 'sesión', necesita: ['token', 'direccionId'],
+        sirve: 'Eliminación lógica. Si era la principal, la más reciente de las restantes pasa a serlo.',
+        casos: [
+          { titulo: 'Eliminar la última creada', tipo: 'ok', peticion: function (c) { return { metodo: 'DELETE', ruta: '/cuenta/direcciones/' + c.e.obtener('direccionId') }; }, espera: { estado: 200 }, despues: function (r, c) { c.e.poner('direccionId', ''); } },
+          { titulo: 'Dirección ajena o inexistente', tipo: 'seguridad', necesita: ['token'], peticion: function () { return { metodo: 'DELETE', ruta: '/cuenta/direcciones/' + idInexistente }; }, espera: { estado: 404, codigo: 'USR-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

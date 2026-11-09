@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laboratorio de endpoints</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+Lab.pagina({
+  archivo: 'index.html',
+  titulo: 'Laboratorio de endpoints',
+  descripcion: 'Pantallas para probar la API sin armar cada petición a mano: cada módulo explica para qué sirve cada endpoint y trae casos listos (éxito, errores, validaciones y seguridad) que se ejecutan contra la API real con un clic.',
+  avisos: [
+    'Esto habla con la API real y **escribe datos reales** en la base de pruebas (usuarios, tiendas, órdenes…). Necesita Docker prendido con el contenedor `shfy-api-core`.',
+    'Orden recomendado: 1) **Cuenta y sesión** (inicia sesión), 2) **Tienda** (elige o crea una), 3) los demás módulos. Lo que cada prueba genera (token, tienda, producto, orden…) se guarda solo y las siguientes lo usan.'
+  ],
+  antes: function (contenido) {
+    var h = Lab.h;
+    var base = h('input', { value: Lab.estado.obtener('base') });
+    base.addEventListener('change', function () { Lab.estado.poner('base', base.value.replace(/\/+$/, '')); Lab.comprobarConexion(); });
+    contenido.appendChild(h('div', { class: 'panel recetas' },
+      h('h2', { texto: 'Conexión' }),
+      h('p', { texto: 'URL base de la API (por defecto la misma de esta página). Si la cambias, pulsa fuera del cuadro y se vuelve a comprobar.' }),
+      h('div', { class: 'campos' }, h('div', { class: 'campo' }, h('label', { texto: 'URL base' }), base))));
+
+    var tarjetas = h('div', { class: 'tarjetas' });
+    var descripciones = {
+      'cuenta.html': ['Registro, activación, login, recuperación de clave, perfil y libreta de direcciones.', '14 endpoints'],
+      'tienda.html': ['Crear tienda, configuración, activar/desactivar, personal con roles y vitrina pública.', '11 endpoints'],
+      'suscripcion.html': ['Planes, pagar, cambiar de plan, cancelar. Qué pasa con SUS-017 cuando vence.', '6 endpoints'],
+      'catalogo.html': ['Categorías, productos, variantes, imágenes, publicar y vitrina pública.', '22 endpoints'],
+      'inventario.html': ['Ver stock, ajustar con motivo, configurar rastreo y movimientos.', '4 endpoints'],
+      'cupones.html': ['CRUD de cupones: porcentaje, monto fijo y envío gratis.', '5 endpoints'],
+      'tarifas.html': ['Tarifas de envío del panel y lista pública para el comprador.', '5 endpoints'],
+      'carrito.html': ['Carrito público: crear, agregar, cupón, cotizar con envío y vincular.', '8 endpoints'],
+      'checkout.html': ['Convertir el carrito en orden: idempotencia, ENV-007, CHK-004.', '1 endpoint'],
+      'ordenes.html': ['Órdenes del panel, mis órdenes y estado por token de acceso.', '5 endpoints'],
+      'pagos.html': ['Pago manual, cancelación, reembolsos y pago en línea (Stripe pendiente).', '6 endpoints'],
+      'envios.html': ['Preparar, despachar, entregar con foto, no entregado, devolver y eventos.', '8 endpoints'],
+      'rutas.html': ['Hoja de ruta y guía de remisión: crear, editar, iniciar y finalizar.', '7 endpoints'],
+      'seguimiento.html': ['Seguimiento público por número de guía.', '1 endpoint'],
+      'metricas.html': ['Resumen de ventas, serie por día y top de productos.', '1 endpoint'],
+      'plataforma.html': ['Solo administrador de plataforma: planes, suscripciones, suspender/reactivar.', '7 endpoints']
+    };
+    Lab.modulos.forEach(function (g) {
+      g[1].forEach(function (m) {
+        if (!descripciones[m[0]]) { return; }
+        tarjetas.appendChild(h('a', { class: 'panel tarjeta', href: m[0] }, h('h3', { texto: m[1] }), h('p', { texto: descripciones[m[0]][0] }), h('div', { class: 'num', texto: descripciones[m[0]][1] })));
+      });
+    });
+    contenido.appendChild(tarjetas);
+  }
+});
+</script>
+</body>
+</html>

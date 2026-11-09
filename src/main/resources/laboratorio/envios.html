@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Envíos · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var base = ['token', 'tiendaId'];
+  var conOrden = base.concat(['ordenId']);
+  var conEnvio = base.concat(['envioId']);
+  var haceFaltaCompra = base.concat(['subdominio', 'varianteId', 'tarifaId']);
+  function P(metodo, ruta, extra) { var o = { metodo: metodo, ruta: ruta, tienda: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  function E(c, s) { return '/panel/envios/' + c.e.obtener('envioId') + (s || ''); }
+  // Deja listo un envío nuevo en estado CREADO: carrito → orden → pago → envío.
+  function envioNuevo(c) {
+    return R.crearCarrito.ejecutar(c).then(function () { return R.hacerCheckout.ejecutar(c); })
+      .then(function () { return R.pagarOrden.ejecutar(c); }).then(function () { return R.crearEnvio.ejecutar(c); });
+  }
+  function envioEnTransito(c) {
+    return envioNuevo(c).then(function () { return c.pedir(P('POST', E(c, '/despachar'))); }).then(function (r) { c.exigir(r, 200, 'Despachar'); });
+  }
+  var camposEnvio = [
+    { k: 'empresa', etiqueta: 'Empresa de transporte', valor: 'Transporte Lab' },
+    { k: 'guia', etiqueta: 'Número de guía (vacío = se genera OT-AAAAMMDD-XXXXXX)', valor: '' },
+    { k: 'url', etiqueta: 'URL de seguimiento (https)', valor: 'https://transporte.laboratorio.test/seguir' }
+  ];
+  function cuerpoEnvio(c) {
+    var b = { empresa_transporte: c.v.empresa, url_seguimiento: c.v.url };
+    if (c.v.guia) { b.numero_guia = c.v.guia; }
+    return b;
+  }
+  function guardarEnvio(r, c) { c.e.poner('envioId', r.json.datos.id); c.e.poner('guia', r.json.datos.numero_guia); }
+
+  Lab.pagina({
+    archivo: 'envios.html',
+    titulo: 'Envíos',
+    descripcion: 'Del pedido pagado a la entrega: preparar el envío, despachar, entregar (con foto opcional), registrar un intento fallido o devolverlo, y ver el historial de eventos.',
+    avisos: [
+      'Estados del envío: `CREADO → EN_TRANSITO → ENTREGADO` (o `DEVUELTO`). Cada transición deja un **evento** en el historial.',
+      'Para preparar un envío la orden debe estar **pagada**. Los casos de este módulo arman un envío nuevo por su cuenta (carrito → orden → pago → envío); necesitan producto publicado, tarifa y tienda operativa en el estado.',
+      'Las guías `OT-AAAAMMDD-XXXXXX` se generan solas; sirven para el seguimiento público.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearTarifa, R.crearProducto, R.crearCarrito, R.hacerCheckout, R.pagarOrden, R.crearEnvio, R.ordenCompleta],
+    endpoints: [
+      {
+        id: 'crear', metodo: 'POST', ruta: '/panel/ordenes/{ordenId}/envio', titulo: 'Preparar la orden (crear el envío)', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conOrden,
+        sirve: 'Crea el envío en estado `CREADO` y marca la orden como preparada.',
+        notas: ['La orden debe estar **pagada** y tener líneas con envío; si no, 422/409 `ENV-003` o `ORD-006`.', 'Una orden tiene un solo envío (`ENV-003` si ya lo tiene).', '`url_seguimiento` debe ser https.'],
+        casos: [
+          { titulo: 'Preparar una orden pagada', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma y paga una orden nueva, y le crea el envío.', campos: camposEnvio,
+            antes: function (c) { return R.crearCarrito.ejecutar(c).then(function () { return R.hacerCheckout.ejecutar(c); }).then(function () { return R.pagarOrden.ejecutar(c); }); },
+            peticion: function (c) { return P('POST', '/panel/ordenes/' + c.e.obtener('ordenId') + '/envio', { cuerpo: cuerpoEnvio(c) }); }, espera: { estado: 201 }, despues: guardarEnvio },
+          { titulo: 'La orden ya tiene envío', tipo: 'error', peticion: function (c) { return P('POST', '/panel/ordenes/' + c.e.obtener('ordenId') + '/envio', { cuerpo: {} }); }, espera: { estado: [409, 422], codigo: 'ENV-003' } },
+          { titulo: 'Orden sin pagar', tipo: 'error', necesita: haceFaltaCompra, descripcion: 'Arma una orden nueva sin pagarla.', antes: function (c) { return R.crearCarrito.ejecutar(c).then(function () { return R.hacerCheckout.ejecutar(c); }); },
+            peticion: function (c) { return P('POST', '/panel/ordenes/' + c.e.obtener('ordenId') + '/envio', { cuerpo: {} }); }, espera: { estado: [409, 422], codigo: undefined } },
+          { titulo: 'URL de seguimiento sin https', tipo: 'error', peticion: function (c) { return P('POST', '/panel/ordenes/' + c.e.obtener('ordenId') + '/envio', { cuerpo: { url_seguimiento: 'http://inseguro.test' } }); }, espera: { estado: [409, 422] } },
+          { titulo: 'Orden inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/ordenes/' + inexistente + '/envio', { cuerpo: {} }); }, espera: { estado: 404, codigo: 'ORD-404' } }
+        ]
+      },
+      {
+        id: 'ver', metodo: 'GET', ruta: '/panel/ordenes/{ordenId}/envio', titulo: 'Ver el envío de una orden', acceso: 'permiso ORDENES_VER', cabeceras: 'X-Tienda-Id', necesita: conOrden,
+        casos: [
+          { titulo: 'Ver el envío', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma un envío nuevo y lo consulta.', antes: envioNuevo, peticion: function (c) { return P('GET', '/panel/ordenes/' + c.e.obtener('ordenId') + '/envio'); }, espera: { estado: 200 } },
+          { titulo: 'Orden inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/ordenes/' + inexistente + '/envio'); }, espera: { estado: 404, codigo: 'ORD-404' } },
+          { titulo: 'Orden sin envío', tipo: 'error', necesita: haceFaltaCompra, descripcion: 'Arma una orden nueva sin envío.', antes: function (c) { return R.crearCarrito.ejecutar(c).then(function () { return R.hacerCheckout.ejecutar(c); }); }, peticion: function (c) { return P('GET', '/panel/ordenes/' + c.e.obtener('ordenId') + '/envio'); }, espera: { estado: 404, codigo: 'ENV-404' } }
+        ]
+      },
+      {
+        id: 'editar', metodo: 'PUT', ruta: '/panel/envios/{envioId}', titulo: 'Editar el envío', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conEnvio,
+        sirve: 'Cambia transportista, guía, URL de seguimiento y fecha estimada.',
+        notas: ['Un envío **entregado** no se puede editar (`ENV-006`).'],
+        casos: [
+          { titulo: 'Cambiar el transportista', tipo: 'ok', campos: camposEnvio, peticion: function (c) { return P('PUT', E(c), { cuerpo: cuerpoEnvio(c) }); }, espera: { estado: 200 } },
+          { titulo: 'URL sin https', tipo: 'error', peticion: function (c) { return P('PUT', E(c), { cuerpo: { url_seguimiento: 'ftp://x' } }); }, espera: { estado: [409, 422], codigo: 'VAL-001' } },
+          { titulo: 'Envío inexistente', tipo: 'error', peticion: function () { return P('PUT', '/panel/envios/' + inexistente, { cuerpo: { empresa_transporte: 'X' } }); }, espera: { estado: 404, codigo: 'ENV-404' } }
+        ]
+      },
+      {
+        id: 'despachar', metodo: 'POST', ruta: '/panel/envios/{envioId}/despachar', titulo: 'Despachar', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conEnvio,
+        sirve: '`CREADO → EN_TRANSITO`. Deja el evento `EN_TRANSITO`.',
+        casos: [
+          { titulo: 'Despachar el envío', tipo: 'ok', peticion: function (c) { return P('POST', E(c, '/despachar')); }, espera: { estado: 200 } },
+          { titulo: 'Despachar de nuevo', tipo: 'error', peticion: function (c) { return P('POST', E(c, '/despachar')); }, espera: { estado: [409, 422] } },
+          { titulo: 'Envío inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/envios/' + inexistente + '/despachar'); }, espera: { estado: 404, codigo: 'ENV-404' } }
+        ]
+      },
+      {
+        id: 'no-entregado', metodo: 'POST', ruta: '/panel/envios/{envioId}/no-entregado', titulo: 'Registrar un intento fallido', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conEnvio,
+        sirve: 'Deja constancia (evento `NO_ENTREGADO`) de que no se pudo entregar. **No cambia el estado**: sigue `EN_TRANSITO`.',
+        notas: ['La `nota` es obligatoria (máx. 500).', 'Solo un envío **en tránsito**; si no, `ENV-004`.'],
+        casos: [
+          { titulo: 'Cliente ausente', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma un envío nuevo, lo despacha y registra el intento fallido.', antes: envioEnTransito, campos: [{ k: 'nota', etiqueta: 'Nota', valor: 'Cliente ausente' }],
+            peticion: function (c) { return P('POST', E(c, '/no-entregado'), { cuerpo: { nota: c.v.nota } }); }, espera: { estado: 200 } },
+          { titulo: 'Sin nota', tipo: 'validacion', peticion: function (c) { return P('POST', E(c, '/no-entregado'), { cuerpo: {} }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'nota' } },
+          { titulo: 'Envío que aún no está en tránsito', tipo: 'error', necesita: haceFaltaCompra, descripcion: 'Arma un envío nuevo sin despacharlo.', antes: envioNuevo,
+            peticion: function (c) { return P('POST', E(c, '/no-entregado'), { cuerpo: { nota: 'Aún no salió' } }); }, espera: { estado: [409, 422], codigo: 'ENV-004' } }
+        ]
+      },
+      {
+        id: 'entregar', metodo: 'POST', ruta: '/panel/envios/{envioId}/entregar', titulo: 'Marcar como entregado', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conEnvio,
+        sirve: '`EN_TRANSITO → ENTREGADO`; la orden pasa a entregada (y a cerrada si ya está cobrada). Cuerpo **opcional** `{foto_url, nota}`.',
+        notas: ['`foto_url` debe ser https; se sube antes con `POST /panel/archivos/imagenes` (Catálogo).'],
+        casos: [
+          { titulo: 'Entregar con foto y nota', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma un envío nuevo, lo despacha y lo entrega.', antes: envioEnTransito,
+            campos: [{ k: 'foto', etiqueta: 'URL de la foto (https)', valor: 'https://picsum.photos/seed/entrega/600/400' }, { k: 'nota', etiqueta: 'Nota', valor: 'Recibido por el cliente' }],
+            peticion: function (c) { return P('POST', E(c, '/entregar'), { cuerpo: { foto_url: c.v.foto, nota: c.v.nota } }); }, espera: { estado: 200 } },
+          { titulo: 'Entregar sin cuerpo', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'El cuerpo es opcional.', antes: envioEnTransito, peticion: function (c) { return P('POST', E(c, '/entregar')); }, espera: { estado: 200 } },
+          { titulo: 'Foto sin https', tipo: 'validacion', necesita: haceFaltaCompra, antes: envioEnTransito, peticion: function (c) { return P('POST', E(c, '/entregar'), { cuerpo: { foto_url: 'http://inseguro.test/f.jpg' } }); }, espera: { estado: 422, codigo: 'VAL-001' } },
+          { titulo: 'Entregar un envío ya entregado', tipo: 'error', necesita: haceFaltaCompra, descripcion: 'Arma un envío, lo entrega y trata de entregarlo otra vez.', antes: function (c) { return envioEnTransito(c).then(function () { return c.pedir(P('POST', E(c, '/entregar'))); }).then(function (r) { c.exigir(r, 200, 'Entregar'); }); }, peticion: function (c) { return P('POST', E(c, '/entregar')); }, espera: { estado: [409, 422] } },
+          { titulo: 'Envío inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/envios/' + inexistente + '/entregar'); }, espera: { estado: 404, codigo: 'ENV-404' } }
+        ]
+      },
+      {
+        id: 'devolver', metodo: 'POST', ruta: '/panel/envios/{envioId}/devolver', titulo: 'Devolver el envío', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conEnvio,
+        sirve: '`EN_TRANSITO → DEVUELTO`.',
+        casos: [
+          { titulo: 'Devolver un envío en tránsito', tipo: 'ok', necesita: haceFaltaCompra, antes: envioEnTransito, peticion: function (c) { return P('POST', E(c, '/devolver')); }, espera: { estado: 200 } },
+          { titulo: 'Devolver uno que no está en tránsito', tipo: 'error', necesita: haceFaltaCompra, antes: envioNuevo, peticion: function (c) { return P('POST', E(c, '/devolver')); }, espera: { estado: [409, 422] } },
+          { titulo: 'Envío inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/envios/' + inexistente + '/devolver'); }, espera: { estado: 404, codigo: 'ENV-404' } }
+        ]
+      },
+      {
+        id: 'eventos', metodo: 'GET', ruta: '/panel/envios/{envioId}/eventos', titulo: 'Historial de eventos', acceso: 'permiso ORDENES_VER', cabeceras: 'X-Tienda-Id', necesita: conEnvio,
+        sirve: 'Eventos `CREADO`, `EN_TRANSITO`, `ENTREGADO`, `NO_ENTREGADO`, `DEVUELTO`, del más reciente al más antiguo.',
+        casos: [
+          { titulo: 'Ver el historial', tipo: 'ok', peticion: function (c) { return P('GET', E(c, '/eventos')); }, espera: { estado: 200, verifica: function (r) { return (r.json.datos && r.json.datos.length) ? '' : 'Se esperaba al menos el evento CREADO'; } } },
+          { titulo: 'Envío inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/envios/' + inexistente + '/eventos'); }, espera: { estado: 404, codigo: 'ENV-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

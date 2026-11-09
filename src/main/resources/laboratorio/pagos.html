@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pagos y reembolsos · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var base = ['token', 'tiendaId'];
+  var conOrden = base.concat(['ordenId']);
+  function P(metodo, ruta, extra) { var o = { metodo: metodo, ruta: ruta, tienda: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  function rutaO(c, s) { return '/panel/ordenes/' + c.e.obtener('ordenId') + s; }
+  // Algunos casos consumen la orden (pagarla, cancelarla): se arma una nueva con las recetas antes de ejecutar.
+  function ordenNueva(c) {
+    return R.crearCarrito.ejecutar(c).then(function () { return R.hacerCheckout.ejecutar(c); });
+  }
+  var haceFaltaCompra = base.concat(['subdominio', 'varianteId', 'tarifaId']);
+
+  Lab.pagina({
+    archivo: 'pagos.html',
+    titulo: 'Pagos y reembolsos',
+    descripcion: 'Registrar el pago manual de una orden, cancelarla y reembolsar (total o parcial). El pago en línea con Stripe queda **pendiente** hasta configurar las claves.',
+    avisos: [
+      'Una orden nace `PENDIENTE`. Con pasarela `MANUAL`, el personal registra el pago; al confirmarse se **descuenta el stock** y se suma al balance de la tienda.',
+      'Algunos casos arman una **orden nueva** por su cuenta (necesitan producto publicado, tarifa y datos de compra en el estado). Eso consume otro carrito y otras unidades de stock.',
+      '**Stripe:** `POST …/pagar` y `POST /webhooks/stripe` responden 409 `PAG-002` / 403 `PAG-003` mientras no estén configuradas las claves del servidor. Se probará cuando se configure Stripe.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearTarifa, R.crearProducto, R.crearCarrito, R.hacerCheckout, R.pagarOrden],
+    endpoints: [
+      {
+        id: 'pago-manual', metodo: 'POST', ruta: '/panel/ordenes/{ordenId}/pagos/manual', titulo: 'Registrar un pago manual', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conOrden,
+        sirve: 'Marca la orden como pagada por su total (cuerpo opcional `{referencia}`). Hace exactamente lo mismo que el webhook de Stripe.',
+        notas: ['Solo órdenes con pasarela `MANUAL` y pendientes de pago; si no, 409 `PAG-004`.', 'Confirma el pago: descuenta stock, suma al balance y deja la orden lista para preparar.'],
+        casos: [
+          { titulo: 'Pagar una orden nueva', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma un carrito y una orden nuevos y la paga.', antes: ordenNueva, campos: [{ k: 'referencia', etiqueta: 'Referencia (opcional)', valor: 'OP-LAB-001' }],
+            peticion: function (c) { return P('POST', rutaO(c, '/pagos/manual'), { cuerpo: { referencia: c.v.referencia } }); }, espera: { estado: 201 }, despues: function (r, c) { c.e.poner('pagoId', r.json.datos.id); } },
+          { titulo: 'Pagar otra vez la misma orden', tipo: 'error', peticion: function (c) { return P('POST', rutaO(c, '/pagos/manual'), { cuerpo: {} }); }, espera: { estado: 409, codigo: 'PAG-004' } },
+          { titulo: 'Orden inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/ordenes/' + inexistente + '/pagos/manual', { cuerpo: {} }); }, espera: { estado: 404, codigo: 'ORD-404' } },
+          { titulo: 'Referencia demasiado larga', tipo: 'validacion', peticion: function () { return P('POST', '/panel/ordenes/' + inexistente + '/pagos/manual', { cuerpo: { referencia: new Array(150).join('x') } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'referencia' } }
+        ]
+      },
+      {
+        id: 'pagos', metodo: 'GET', ruta: '/panel/ordenes/{ordenId}/pagos', titulo: 'Pagos y reembolsos de la orden', acceso: 'permiso ORDENES_VER', cabeceras: 'X-Tienda-Id', necesita: conOrden,
+        casos: [
+          { titulo: 'Ver los pagos', tipo: 'ok', peticion: function (c) { return P('GET', rutaO(c, '/pagos')); }, espera: { estado: 200 } },
+          { titulo: 'Orden inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/ordenes/' + inexistente + '/pagos'); }, espera: { estado: 404, codigo: 'ORD-404' } }
+        ]
+      },
+      {
+        id: 'cancelar', metodo: 'POST', ruta: '/panel/ordenes/{ordenId}/cancelar', titulo: 'Cancelar una orden', acceso: 'permiso ORDENES_CANCELAR', cabeceras: 'X-Tienda-Id', necesita: conOrden,
+        sirve: 'Cancela una orden **no preparada**. Motivos: `CLIENTE`, `FRAUDE`, `SIN_STOCK`, `OTRO` (con `detalle` obligatorio).',
+        notas: ['Una orden sin pagar se anula y libera el stock reservado.', 'Una orden **pagada** exige además permiso de reembolsos y la devuelve; `reponer_stock` (por defecto sí) repone las unidades.', 'Una orden ya preparada no se puede cancelar (`ORD-007`).'],
+        casos: [
+          { titulo: 'Cancelar una orden sin pagar', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma una orden nueva sin pagarla y la cancela.', antes: ordenNueva,
+            campos: [{ k: 'motivo', etiqueta: 'Motivo', tipo: 'select', opciones: ['CLIENTE', 'FRAUDE', 'SIN_STOCK', 'OTRO'] }, { k: 'detalle', etiqueta: 'Detalle', valor: 'Cancelada desde el laboratorio' }],
+            peticion: function (c) { return P('POST', rutaO(c, '/cancelar'), { cuerpo: { motivo: c.v.motivo, detalle: c.v.detalle } }); }, espera: { estado: 200 } },
+          { titulo: 'Cancelar de nuevo la misma orden', tipo: 'error', peticion: function (c) { return P('POST', rutaO(c, '/cancelar'), { cuerpo: { motivo: 'CLIENTE' } }); }, espera: { estado: [409, 422], codigo: 'ORD-007' } },
+          { titulo: 'Motivo OTRO sin detalle', tipo: 'error', peticion: function (c) { return P('POST', rutaO(c, '/cancelar'), { cuerpo: { motivo: 'OTRO' } }); }, espera: { estado: 422, codigo: 'VAL-001' } },
+          { titulo: 'Motivo que no existe', tipo: 'validacion', peticion: function (c) { return P('POST', rutaO(c, '/cancelar'), { cuerpo: { motivo: 'ABURRIMIENTO' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'motivo' } },
+          { titulo: 'Orden inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/ordenes/' + inexistente + '/cancelar', { cuerpo: { motivo: 'CLIENTE' } }); }, espera: { estado: 404, codigo: 'ORD-404' } }
+        ]
+      },
+      {
+        id: 'reembolso', metodo: 'POST', ruta: '/panel/ordenes/{ordenId}/reembolsos', titulo: 'Emitir un reembolso', acceso: 'permiso REEMBOLSOS_EMITIR', cabeceras: 'X-Tienda-Id', necesita: conOrden,
+        sirve: 'Devuelve parte o todo lo cobrado, con un motivo de 5 a 255 caracteres. Puede reponer stock por variante.',
+        notas: ['Solo órdenes **pagadas**; la suma de reembolsos no puede pasar de lo cobrado (`PAG-007`).', 'El monto lleva hasta 2 decimales y debe ser mayor que 0.'],
+        casos: [
+          { titulo: 'Reembolsar 1.00 de una orden pagada', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma una orden nueva, la paga y reembolsa 1.00.', campos: [{ k: 'monto', etiqueta: 'Monto', tipo: 'numero', valor: 1 }],
+            antes: function (c) { return ordenNueva(c).then(function () { return R.pagarOrden.ejecutar(c); }); },
+            peticion: function (c) { return P('POST', rutaO(c, '/reembolsos'), { cuerpo: { monto: c.v.monto, motivo: 'Reembolso de prueba del laboratorio' } }); }, espera: { estado: [200, 201] } },
+          { titulo: 'Reembolsar más de lo cobrado', tipo: 'error', peticion: function (c) { return P('POST', rutaO(c, '/reembolsos'), { cuerpo: { monto: 999999, motivo: 'Monto excesivo de prueba' } }); }, espera: { estado: 422, codigo: 'PAG-007' } },
+          { titulo: 'Reembolsar una orden sin pagar', tipo: 'error', necesita: haceFaltaCompra, descripcion: 'Arma una orden nueva sin pagar e intenta reembolsar.', antes: ordenNueva,
+            peticion: function (c) { return P('POST', rutaO(c, '/reembolsos'), { cuerpo: { monto: 1, motivo: 'Orden aún sin pagar' } }); }, espera: { estado: 409, codigo: 'PAG-007' } },
+          { titulo: 'Monto 0', tipo: 'validacion', peticion: function (c) { return P('POST', rutaO(c, '/reembolsos'), { cuerpo: { monto: 0, motivo: 'Monto cero de prueba' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'monto' } },
+          { titulo: 'Tres decimales', tipo: 'validacion', peticion: function (c) { return P('POST', rutaO(c, '/reembolsos'), { cuerpo: { monto: 1.234, motivo: 'Tres decimales de prueba' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'monto' } },
+          { titulo: 'Motivo muy corto', tipo: 'validacion', peticion: function (c) { return P('POST', rutaO(c, '/reembolsos'), { cuerpo: { monto: 1, motivo: 'no' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'motivo' } },
+          { titulo: 'Orden inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/ordenes/' + inexistente + '/reembolsos', { cuerpo: { monto: 1, motivo: 'Orden que no existe' } }); }, espera: { estado: 404, codigo: 'ORD-404' } }
+        ]
+      },
+      {
+        id: 'stripe-pagar', metodo: 'POST', ruta: '/vitrina/{subdominio}/ordenes/{tokenAcceso}/pagar', titulo: 'Iniciar el pago con Stripe  (pendiente)', acceso: 'público (10 por minuto)', necesita: ['subdominio', 'tokenAcceso'],
+        sirve: 'Devuelve `{client_secret, monto, moneda}` para confirmar el pago con Stripe.js. Solo órdenes `STRIPE`, pendientes y no vencidas.',
+        notas: ['⏳ **Pendiente**: sin las claves de Stripe en el servidor responde 409 `PAG-002` ("Esta orden no se paga en línea" / "Los pagos en línea no están configurados"). El caso de abajo documenta ese estado.'],
+        casos: [
+          { titulo: 'Sin Stripe configurado', tipo: 'error', descripcion: 'La orden del estado es MANUAL, así que también responde PAG-002.', peticion: function (c) { return { metodo: 'POST', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/ordenes/' + c.e.obtener('tokenAcceso') + '/pagar', sesion: false }; }, espera: { estado: 409, codigo: 'PAG-002' } },
+          { titulo: 'Token inexistente', tipo: 'error', necesita: ['subdominio'], peticion: function (c) { return { metodo: 'POST', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/ordenes/token-falso-' + Lab.azar(8) + '/pagar', sesion: false }; }, espera: { estado: 404, codigo: 'ORD-404' } }
+        ]
+      },
+      {
+        id: 'webhook', metodo: 'POST', ruta: '/webhooks/stripe', titulo: 'Webhook de Stripe  (pendiente)', acceso: 'público con firma', necesita: [],
+        sirve: 'Stripe avisa aquí que un pago se completó; confirma la orden. Exige la cabecera `Stripe-Signature` válida.',
+        notas: ['⏳ **Pendiente**: sin el secreto del webhook configurado responde 403 `PAG-003`. Con uno configurado, una firma inválida también responde `PAG-003`.'],
+        casos: [
+          { titulo: 'Firma inválida', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'POST', ruta: '/webhooks/stripe', sesion: false, cabeceras: { 'Stripe-Signature': 't=1,v1=firma-falsa' }, cuerpo: { id: 'evt_lab', type: 'payment_intent.succeeded' } }; }, espera: { estado: [400, 403, 422], codigo: 'PAG-003' } },
+          { titulo: 'Sin firma', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'POST', ruta: '/webhooks/stripe', sesion: false, cuerpo: { id: 'evt_lab' } }; }, espera: { estado: [400, 403, 422], codigo: 'PAG-003' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

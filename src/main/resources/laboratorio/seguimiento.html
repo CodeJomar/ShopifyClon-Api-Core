@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seguimiento · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  Lab.pagina({
+    archivo: 'seguimiento.html',
+    titulo: 'Seguimiento público',
+    descripcion: 'El comprador sigue su pedido con el número de guía, **sin cuenta ni sesión**.',
+    avisos: [
+      'La guía (`OT-AAAAMMDD-XXXXXX`) sale de «Envíos → Preparar la orden» y queda en el estado como `guia`. Sin ella, usa la receta «Todo de una vez».',
+      'La respuesta **no** incluye dirección ni teléfono del comprador.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearTarifa, R.crearProducto, R.ordenCompleta],
+    endpoints: [
+      {
+        id: 'seguimiento', metodo: 'GET', ruta: '/seguimiento/{numeroGuia}', titulo: 'Consultar un envío por su guía', acceso: 'público', necesita: ['guia'],
+        sirve: 'Estado actual, transportista, chofer (si hay ruta), fechas y eventos del envío.',
+        notas: ['Una guía inexistente responde 404 `ENV-404`; no se distingue de la de otra tienda.', 'Si dos guías manuales coinciden, gana el envío más reciente.'],
+        casos: [
+          { titulo: 'Con la guía del estado', tipo: 'ok', peticion: function (c) { return { metodo: 'GET', ruta: '/seguimiento/' + encodeURIComponent(c.e.obtener('guia')), sesion: false }; }, espera: { estado: 200,
+            verifica: function (r) { var t = r.texto || ''; return /direccion|telefono/i.test(t) ? 'La respuesta pública no debería exponer dirección ni teléfono' : ''; } } },
+          { titulo: 'Guía que no existe', tipo: 'error', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/seguimiento/OT-00000000-ZZZZZZ', sesion: false }; }, espera: { estado: 404, codigo: 'ENV-404' } },
+          { titulo: 'Guía escrita por el usuario', tipo: 'ok', manual: true, necesita: [], campos: [{ k: 'guia', etiqueta: 'Número de guía', valor: function (e) { return e.obtener('guia') || ''; } }],
+            peticion: function (c) { return { metodo: 'GET', ruta: '/seguimiento/' + encodeURIComponent(c.v.guia), sesion: false }; }, espera: { estado: [200, 404] } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

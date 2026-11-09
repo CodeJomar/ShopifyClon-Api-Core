@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inventario · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var base = ['token', 'tiendaId', 'varianteId'];
+  function P(metodo, ruta, extra) { var o = { metodo: metodo, ruta: ruta, tienda: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  function rutaV(c, sufijo) { return '/panel/inventario/variantes/' + c.e.obtener('varianteId') + (sufijo || ''); }
+
+  Lab.pagina({
+    archivo: 'inventario.html',
+    titulo: 'Inventario',
+    descripcion: 'Ver el stock de una variante, ajustarlo con motivo, configurar el rastreo y revisar el historial de movimientos.',
+    avisos: [
+      'Necesitas una variante: usa la receta «Crear producto publicado» (deja 20 unidades en stock y guarda `varianteId`).',
+      'Las cantidades solo cambian por este módulo, el checkout (**reserva** al crear la orden) y los pagos (**descuento** al confirmar el pago, **reposición** al cancelar). El ajuste manual fija la cantidad **física**.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearProducto],
+    endpoints: [
+      {
+        id: 'ver', metodo: 'GET', ruta: '/panel/inventario/variantes/{varianteId}', titulo: 'Ver el inventario de una variante', acceso: 'permiso INVENTARIO_AJUSTAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Cantidad disponible (física), reservada y vendible (disponible − reservada), más la configuración de rastreo.',
+        casos: [
+          { titulo: 'Ver la variante del estado', tipo: 'ok', peticion: function (c) { return P('GET', rutaV(c)); }, espera: { estado: 200 } },
+          { titulo: 'Variante inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/inventario/variantes/' + inexistente); }, espera: { estado: 404, codigo: 'INV-404' } },
+          { titulo: 'Sin X-Tienda-Id', tipo: 'validacion', peticion: function (c) { return { metodo: 'GET', ruta: rutaV(c) }; }, espera: { estado: 400, codigo: 'SEG-001' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function (c) { return { metodo: 'GET', ruta: rutaV(c), sesion: false, tienda: true }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'ajustar', metodo: 'PUT', ruta: '/panel/inventario/variantes/{varianteId}', titulo: 'Ajustar la cantidad', acceso: 'permiso INVENTARIO_AJUSTAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Fija la cantidad **física** (`nueva_cantidad`) con un motivo de 5 a 255 caracteres; queda un movimiento en el historial.',
+        notas: ['No puede ser menor que la cantidad **reservada** por órdenes pendientes (422 `INV-007`).', 'No puede ser negativa.'],
+        casos: [
+          { titulo: 'Ajustar a 35 unidades', tipo: 'ok', campos: [{ k: 'cantidad', etiqueta: 'Nueva cantidad', tipo: 'numero', valor: 35 }, { k: 'motivo', etiqueta: 'Motivo', valor: 'Conteo físico del laboratorio' }],
+            peticion: function (c) { return P('PUT', rutaV(c), { cuerpo: { nueva_cantidad: c.v.cantidad, motivo: c.v.motivo } }); }, espera: { estado: 200 } },
+          { titulo: 'Cantidad negativa', tipo: 'validacion', peticion: function (c) { return P('PUT', rutaV(c), { cuerpo: { nueva_cantidad: -1, motivo: 'Prueba de validación' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'nueva_cantidad' } },
+          { titulo: 'Motivo muy corto', tipo: 'validacion', peticion: function (c) { return P('PUT', rutaV(c), { cuerpo: { nueva_cantidad: 10, motivo: 'no' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'motivo' } },
+          { titulo: 'Sin cantidad', tipo: 'validacion', peticion: function (c) { return P('PUT', rutaV(c), { cuerpo: { motivo: 'Falta la cantidad' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'nueva_cantidad' } },
+          { titulo: 'Menos que lo reservado', tipo: 'error', manual: true, descripcion: 'Solo falla si hay stock reservado: crea antes una orden pendiente de pago (Checkout) con esta variante y ajusta a 0.',
+            peticion: function (c) { return P('PUT', rutaV(c), { cuerpo: { nueva_cantidad: 0, motivo: 'Probar INV-007 con reserva' } }); }, espera: { estado: [200, 422], codigo: undefined } },
+          { titulo: 'Variante inexistente', tipo: 'error', peticion: function () { return P('PUT', '/panel/inventario/variantes/' + inexistente, { cuerpo: { nueva_cantidad: 1, motivo: 'Variante que no existe' } }); }, espera: { estado: 404, codigo: 'INV-404' } }
+        ]
+      },
+      {
+        id: 'configurar', metodo: 'PUT', ruta: '/panel/inventario/variantes/{varianteId}/configuracion', titulo: 'Configurar el rastreo', acceso: 'permiso INVENTARIO_AJUSTAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Activa o desactiva `rastrea_inventario` y `permitir_venta_sin_stock`. Los campos que no mandas se conservan.',
+        notas: ['Con rastreo desactivado, la variante se vende sin controlar cantidades.', 'Con `permitir_venta_sin_stock`, el checkout no bloquea por falta de stock.'],
+        casos: [
+          { titulo: 'Permitir venta sin stock', tipo: 'ok', campos: [{ k: 'rastrea', etiqueta: '¿Rastrea inventario?', tipo: 'bool', valor: true }, { k: 'sinStock', etiqueta: '¿Permitir venta sin stock?', tipo: 'bool', valor: true }],
+            peticion: function (c) { return P('PUT', rutaV(c, '/configuracion'), { cuerpo: { rastrea_inventario: c.v.rastrea, permitir_venta_sin_stock: c.v.sinStock } }); }, espera: { estado: 200 } },
+          { titulo: 'Volver a la configuración normal', tipo: 'ok', peticion: function (c) { return P('PUT', rutaV(c, '/configuracion'), { cuerpo: { rastrea_inventario: true, permitir_venta_sin_stock: false } }); }, espera: { estado: 200 } },
+          { titulo: 'Variante inexistente', tipo: 'error', peticion: function () { return P('PUT', '/panel/inventario/variantes/' + inexistente + '/configuracion', { cuerpo: { rastrea_inventario: true } }); }, espera: { estado: 404, codigo: 'INV-404' } }
+        ]
+      },
+      {
+        id: 'movimientos', metodo: 'GET', ruta: '/panel/inventario/variantes/{varianteId}/movimientos', titulo: 'Historial de movimientos', acceso: 'permiso INVENTARIO_AJUSTAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Entradas y salidas (carga inicial, ajustes, reservas, ventas, reposiciones), paginadas, con filtros `desde` y `hasta`.',
+        notas: ['Las fechas son ISO-8601 **con hora y zona**: `2026-11-01T00:00:00Z`.'],
+        casos: [
+          { titulo: 'Primera página', tipo: 'ok', peticion: function (c) { return P('GET', rutaV(c, '/movimientos'), { query: { pagina: 0 } }); }, espera: { estado: 200 } },
+          { titulo: 'Desde hoy', tipo: 'ok', campos: [{ k: 'desde', etiqueta: 'Desde (ISO con hora)', valor: function () { return Lab.hora(-1); } }],
+            peticion: function (c) { return P('GET', rutaV(c, '/movimientos'), { query: { desde: c.v.desde } }); }, espera: { estado: 200 } },
+          { titulo: 'Fecha mal escrita', tipo: 'validacion', peticion: function (c) { return P('GET', rutaV(c, '/movimientos'), { query: { desde: 'ayer' } }); }, espera: { estado: [400, 422] } },
+          { titulo: 'Variante inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/inventario/variantes/' + inexistente + '/movimientos'); }, espera: { estado: 404, codigo: 'INV-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

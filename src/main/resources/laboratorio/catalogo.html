@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catálogo · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var base = ['token', 'tiendaId'];
+  function P(metodo, ruta, extra) { var o = { metodo: metodo, ruta: ruta, tienda: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  var camposProducto = [
+    { k: 'titulo', etiqueta: 'Título', valor: function () { return 'Producto Lab ' + Lab.azar(4); } },
+    { k: 'descripcion', etiqueta: 'Descripción', valor: 'Descripción de prueba' },
+    { k: 'precio', etiqueta: 'Precio de la variante', tipo: 'numero', valor: 50 },
+    { k: 'sku', etiqueta: 'SKU', valor: function () { return 'LAB-' + Lab.azar(6).toUpperCase(); } },
+    { k: 'stock', etiqueta: 'Cantidad inicial', tipo: 'numero', valor: 20 },
+    { k: 'digital', etiqueta: '¿Es digital?', tipo: 'bool', valor: false }
+  ];
+  function conCampo(lista, k, nuevo) { return lista.map(function (x) { return x.k === k ? nuevo : x; }); }
+  function cuerpoProducto(c, extraVar) {
+    var v = { titulo: 'Única', sku: c.v.sku, precio: c.v.precio, requiere_envio: !c.v.digital, cantidad_inicial: c.v.stock, rastrea_inventario: true, permitir_venta_sin_stock: false };
+    for (var k in (extraVar || {})) { v[k] = extraVar[k]; }
+    return { titulo: c.v.titulo, descripcion: c.v.descripcion, es_digital: c.v.digital, variantes: [v] };
+  }
+  function guardarProducto(r, c) {
+    var d = r.json.datos;
+    c.e.poner('productoId', d.id); c.e.poner('varianteId', d.variantes[0].id); c.e.poner('sku', d.variantes[0].sku); c.e.poner('slug', d.identificador_url);
+  }
+
+  Lab.pagina({
+    archivo: 'catalogo.html',
+    titulo: 'Catálogo',
+    descripcion: 'Categorías, productos con variantes, imágenes, publicación y la vitrina pública. Para vender hace falta un producto **publicado**: con una variante de precio > 0 y una imagen principal.',
+    avisos: [
+      'Orden típico: crear producto → agregar imagen → publicar. Usa la receta «Crear producto publicado» para dejar todo listo de golpe (guarda `productoId`, `varianteId` y `slug`).',
+      'Crear productos respeta el `limite_productos` del plan de la tienda. Todas las escrituras del panel exigen suscripción operativa (`SUS-017`).'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearProducto],
+    endpoints: [
+      {
+        id: 'subir-imagen', metodo: 'POST', ruta: '/panel/archivos/imagenes', titulo: 'Subir una imagen', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Sube un archivo (multipart, campo `archivo`, máx. 5 MB) y devuelve la `url` https para usarla en imágenes de producto o fotos de entrega.',
+        notas: ['El tipo se detecta por los **bytes**, no por el nombre ni el Content-Type.', 'Si el almacenamiento de archivos no está configurado en el servidor responde error `ALM-001` (esperable en local).'],
+        casos: [
+          { titulo: 'Subir un PNG de 1×1', tipo: 'ok', descripcion: 'Acepta 201 si hay almacenamiento configurado; si no, ALM-001.', peticion: function (c) { return P('POST', '/panel/archivos/imagenes', { archivo: { campo: 'archivo', nombre: 'lab.png', tipo: 'image/png', base64: c.png } }); }, espera: { estado: [200, 201, 500, 503] },
+            despues: function (r, c) { if (r.json && r.json.datos && r.json.datos.url) { c.e.poner('urlImagen', r.json.datos.url); } } },
+          { titulo: 'Archivo que no es imagen', tipo: 'validacion', peticion: function () { return P('POST', '/panel/archivos/imagenes', { archivo: { campo: 'archivo', nombre: 'malo.png', tipo: 'image/png', base64: btoa('esto no es una imagen') } }); }, espera: { estado: [400, 415, 422, 500, 503] } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function () { return { metodo: 'POST', ruta: '/panel/archivos/imagenes', sesion: false, tienda: true }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'cat-crear', metodo: 'POST', ruta: '/panel/catalogo/categorias', titulo: 'Crear una categoría', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Agrupa productos. El identificador (slug) se genera del nombre si no lo mandas.',
+        casos: [
+          { titulo: 'Crear categoría', tipo: 'ok', campos: [{ k: 'nombre', etiqueta: 'Nombre', valor: function () { return 'Categoría ' + Lab.azar(4); } }, { k: 'descripcion', etiqueta: 'Descripción', valor: 'De laboratorio' }],
+            peticion: function (c) { return P('POST', '/panel/catalogo/categorias', { cuerpo: { nombre: c.v.nombre, descripcion: c.v.descripcion } }); }, espera: { estado: 201 }, despues: function (r, c) { c.e.poner('categoriaId', r.json.datos.id); c.e.poner('categoriaSlug', r.json.datos.identificador_url); } },
+          { titulo: 'Identificador repetido', tipo: 'error', necesita: base.concat(['categoriaSlug']), peticion: function (c) { return P('POST', '/panel/catalogo/categorias', { cuerpo: { nombre: 'Otra', identificador_url: c.e.obtener('categoriaSlug') } }); }, espera: { estado: 422, codigo: 'CAT-002' } },
+          { titulo: 'Sin nombre', tipo: 'validacion', peticion: function () { return P('POST', '/panel/catalogo/categorias', { cuerpo: {} }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'nombre' } }
+        ]
+      },
+      {
+        id: 'cat-listar', metodo: 'GET', ruta: '/panel/catalogo/categorias', titulo: 'Listar categorías', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [{ titulo: 'Listar', tipo: 'ok', peticion: function () { return P('GET', '/panel/catalogo/categorias'); }, espera: { estado: 200 } }]
+      },
+      {
+        id: 'cat-editar', metodo: 'PUT', ruta: '/panel/catalogo/categorias/{id}', titulo: 'Editar una categoría', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Editar la categoría creada', tipo: 'ok', necesita: base.concat(['categoriaId']), campos: [{ k: 'nombre', etiqueta: 'Nombre', valor: function () { return 'Renombrada ' + Lab.azar(3); } }],
+            peticion: function (c) { return P('PUT', '/panel/catalogo/categorias/' + c.e.obtener('categoriaId'), { cuerpo: { nombre: c.v.nombre } }); }, espera: { estado: 200 } },
+          { titulo: 'Categoría inexistente', tipo: 'error', peticion: function () { return P('PUT', '/panel/catalogo/categorias/' + inexistente, { cuerpo: { nombre: 'x' } }); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'cat-borrar', metodo: 'DELETE', ruta: '/panel/catalogo/categorias/{id}', titulo: 'Eliminar una categoría', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Eliminar la categoría creada', tipo: 'ok', necesita: base.concat(['categoriaId']), peticion: function (c) { return P('DELETE', '/panel/catalogo/categorias/' + c.e.obtener('categoriaId')); }, espera: { estado: 200 }, despues: function (r, c) { c.e.poner('categoriaId', ''); } },
+          { titulo: 'Categoría inexistente', tipo: 'error', peticion: function () { return P('DELETE', '/panel/catalogo/categorias/' + inexistente); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'prod-crear', metodo: 'POST', ruta: '/panel/catalogo/productos', titulo: 'Crear un producto con sus variantes', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Crea el producto con 1 a 100 variantes. Nace **no publicado**.',
+        notas: ['`sku` es único por tienda y se guarda en mayúsculas; no puede tener espacios.', '`precio_comparacion` debe ser mayor que `precio` (`CAT-004`).', 'Un producto digital fuerza `requiere_envio = false`.', 'Respeta el límite de productos del plan.'],
+        casos: [
+          { titulo: 'Crear producto', tipo: 'ok', campos: camposProducto, peticion: function (c) { return P('POST', '/panel/catalogo/productos', { cuerpo: cuerpoProducto(c) }); }, espera: { estado: 201 }, despues: guardarProducto },
+          { titulo: 'SKU repetido en la tienda', tipo: 'error', necesita: base.concat(['sku']), campos: conCampo(camposProducto, 'sku', { k: 'sku', etiqueta: 'SKU (vacío = el del producto del estado)', valor: '' }),
+            peticion: function (c) { if (!c.v.sku) { c.v.sku = c.e.obtener('sku'); } return P('POST', '/panel/catalogo/productos', { cuerpo: cuerpoProducto(c) }); }, espera: { estado: 422, codigo: 'CAT-003' } },
+          { titulo: 'SKU con espacios', tipo: 'error', campos: conCampo(camposProducto, 'sku', { k: 'sku', etiqueta: 'SKU', valor: 'CON ESPACIOS' }), peticion: function (c) { return P('POST', '/panel/catalogo/productos', { cuerpo: cuerpoProducto(c) }); }, espera: { estado: 422, codigo: 'CAT-003' } },
+          { titulo: 'Precio de comparación menor al precio', tipo: 'error', campos: camposProducto, peticion: function (c) { return P('POST', '/panel/catalogo/productos', { cuerpo: cuerpoProducto(c, { precio_comparacion: 1 }) }); }, espera: { estado: 422, codigo: 'CAT-004' } },
+          { titulo: 'Sin variantes', tipo: 'validacion', peticion: function () { return P('POST', '/panel/catalogo/productos', { cuerpo: { titulo: 'Sin variantes', variantes: [] } }); }, espera: { estado: 422 } },
+          { titulo: 'Sin título', tipo: 'validacion', peticion: function () { return P('POST', '/panel/catalogo/productos', { cuerpo: { variantes: [] } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'titulo' } },
+          { titulo: 'Precio negativo', tipo: 'validacion', campos: conCampo(camposProducto, 'precio', { k: 'precio', etiqueta: 'Precio', tipo: 'numero', valor: -5 }), peticion: function (c) { return P('POST', '/panel/catalogo/productos', { cuerpo: cuerpoProducto(c) }); }, espera: { estado: 422, codigo: 'VAL-001' } }
+        ]
+      },
+      {
+        id: 'prod-listar', metodo: 'GET', ruta: '/panel/catalogo/productos', titulo: 'Listar productos', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Paginado (`datos.datos`). Filtros: `texto`, `publicado`, `categoria_id`.',
+        casos: [
+          { titulo: 'Todos', tipo: 'ok', peticion: function () { return P('GET', '/panel/catalogo/productos', { query: { pagina: 0 } }); }, espera: { estado: 200 } },
+          { titulo: 'Solo publicados', tipo: 'ok', peticion: function () { return P('GET', '/panel/catalogo/productos', { query: { publicado: true } }); }, espera: { estado: 200 } },
+          { titulo: 'Buscar por texto', tipo: 'ok', campos: [{ k: 'texto', etiqueta: 'Texto', valor: 'Lab' }], peticion: function (c) { return P('GET', '/panel/catalogo/productos', { query: { texto: c.v.texto } }); }, espera: { estado: 200 } }
+        ]
+      },
+      {
+        id: 'prod-ver', metodo: 'GET', ruta: '/panel/catalogo/productos/{id}', titulo: 'Ver un producto', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Producto con variantes, imágenes y categorías (incluye el costo unitario, que la vitrina nunca expone).',
+        casos: [
+          { titulo: 'Ver el producto creado', tipo: 'ok', necesita: base.concat(['productoId']), peticion: function (c) { return P('GET', '/panel/catalogo/productos/' + c.e.obtener('productoId')); }, espera: { estado: 200 } },
+          { titulo: 'Producto inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/catalogo/productos/' + inexistente); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'prod-editar', metodo: 'PUT', ruta: '/panel/catalogo/productos/{id}', titulo: 'Editar los datos del producto', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        notas: ['Solo datos del producto; las variantes se editan por separado.'],
+        casos: [
+          { titulo: 'Cambiar título y descripción', tipo: 'ok', necesita: base.concat(['productoId']), campos: [{ k: 'titulo', etiqueta: 'Título', valor: 'Producto editado' }, { k: 'descripcion', etiqueta: 'Descripción', valor: 'Editado desde el laboratorio' }],
+            peticion: function (c) { return P('PUT', '/panel/catalogo/productos/' + c.e.obtener('productoId'), { cuerpo: { titulo: c.v.titulo, descripcion: c.v.descripcion, es_digital: false } }); }, espera: { estado: 200 } },
+          { titulo: 'Sin título', tipo: 'validacion', peticion: function () { return P('PUT', '/panel/catalogo/productos/' + inexistente, { cuerpo: { descripcion: 'x' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'titulo' } },
+          { titulo: 'Producto inexistente', tipo: 'error', peticion: function () { return P('PUT', '/panel/catalogo/productos/' + inexistente, { cuerpo: { titulo: 'x' } }); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'prod-categorias', metodo: 'PUT', ruta: '/panel/catalogo/productos/{id}/categorias', titulo: 'Asignar categorías', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Reemplaza **todas** las categorías del producto por la lista que mandes.',
+        casos: [
+          { titulo: 'Asignar la categoría creada', tipo: 'ok', necesita: base.concat(['productoId', 'categoriaId']), peticion: function (c) { return P('PUT', '/panel/catalogo/productos/' + c.e.obtener('productoId') + '/categorias', { cuerpo: { categoria_ids: [c.e.obtener('categoriaId')] } }); }, espera: { estado: 200 } },
+          { titulo: 'Categoría inexistente', tipo: 'error', necesita: base.concat(['productoId']), peticion: function (c) { return P('PUT', '/panel/catalogo/productos/' + c.e.obtener('productoId') + '/categorias', { cuerpo: { categoria_ids: [inexistente] } }); }, espera: { estado: 404, codigo: 'CAT-404' } },
+          { titulo: 'Falta la lista', tipo: 'validacion', peticion: function () { return P('PUT', '/panel/catalogo/productos/' + inexistente + '/categorias', { cuerpo: {} }); }, espera: { estado: 422, codigo: 'VAL-001' } }
+        ]
+      },
+      {
+        id: 'img-agregar', metodo: 'POST', ruta: '/panel/catalogo/productos/{productoId}/imagenes', titulo: 'Agregar una imagen al producto', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Registra una imagen por URL https. La primera es la principal; marcar otra como principal desmarca la anterior.',
+        casos: [
+          { titulo: 'Agregar imagen principal', tipo: 'ok', necesita: base.concat(['productoId']), campos: [{ k: 'url', etiqueta: 'URL https', valor: function () { return 'https://picsum.photos/seed/' + Lab.azar(5) + '/600/600'; } }],
+            peticion: function (c) { return P('POST', '/panel/catalogo/productos/' + c.e.obtener('productoId') + '/imagenes', { cuerpo: { url_imagen: c.v.url, texto_alternativo: 'Imagen del laboratorio', es_principal: true } }); }, espera: { estado: [200, 201] }, despues: function (r, c) { c.e.poner('imagenId', r.json.datos.id); c.e.poner('urlImagenActual', c.v.url); } },
+          { titulo: 'URL que no es https', tipo: 'validacion', necesita: base.concat(['productoId']), peticion: function (c) { return P('POST', '/panel/catalogo/productos/' + c.e.obtener('productoId') + '/imagenes', { cuerpo: { url_imagen: 'http://inseguro.test/a.png' } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'url_imagen' } },
+          { titulo: 'Producto inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/catalogo/productos/' + inexistente + '/imagenes', { cuerpo: { url_imagen: 'https://picsum.photos/seed/x/10/10' } }); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'img-editar', metodo: 'PUT', ruta: '/panel/catalogo/imagenes/{id}', titulo: 'Editar una imagen', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Cambiar el texto alternativo', tipo: 'ok', necesita: base.concat(['imagenId']), campos: [{ k: 'alt', etiqueta: 'Texto alternativo', valor: 'Texto editado' }],
+            peticion: function (c) { return P('PUT', '/panel/catalogo/imagenes/' + c.e.obtener('imagenId'), { cuerpo: { url_imagen: c.e.obtener('urlImagenActual') || 'https://picsum.photos/seed/editada/600/600', texto_alternativo: c.v.alt } }); }, espera: { estado: 200 } },
+          { titulo: 'Imagen inexistente', tipo: 'error', peticion: function () { return P('PUT', '/panel/catalogo/imagenes/' + inexistente, { cuerpo: { url_imagen: 'https://picsum.photos/seed/x/10/10', texto_alternativo: 'x' } }); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'img-borrar', metodo: 'DELETE', ruta: '/panel/catalogo/imagenes/{id}', titulo: 'Eliminar una imagen', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        notas: ['Si borras la imagen principal, el producto ya no se podrá publicar hasta marcar otra (`CAT-007`).'],
+        casos: [
+          { titulo: 'Eliminar la imagen agregada', tipo: 'ok', manual: true, necesita: base.concat(['imagenId']), peticion: function (c) { return P('DELETE', '/panel/catalogo/imagenes/' + c.e.obtener('imagenId')); }, espera: { estado: 200 }, despues: function (r, c) { c.e.poner('imagenId', ''); } },
+          { titulo: 'Imagen inexistente', tipo: 'error', peticion: function () { return P('DELETE', '/panel/catalogo/imagenes/' + inexistente); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'var-agregar', metodo: 'POST', ruta: '/panel/catalogo/productos/{productoId}/variantes', titulo: 'Agregar una variante', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Agregar variante', tipo: 'ok', necesita: base.concat(['productoId']), campos: [{ k: 'sku', etiqueta: 'SKU', valor: function () { return 'LAB-' + Lab.azar(6).toUpperCase(); } }, { k: 'precio', etiqueta: 'Precio', tipo: 'numero', valor: 60 }],
+            peticion: function (c) { return P('POST', '/panel/catalogo/productos/' + c.e.obtener('productoId') + '/variantes', { cuerpo: { titulo: 'Talla L', sku: c.v.sku, precio: c.v.precio, requiere_envio: true, cantidad_inicial: 5, rastrea_inventario: true } }); }, espera: { estado: 201 },
+            despues: function (r, c) { c.e.poner('varianteExtraId', r.json.datos.id); } },
+          { titulo: 'SKU repetido', tipo: 'error', necesita: base.concat(['productoId', 'sku']), peticion: function (c) { return P('POST', '/panel/catalogo/productos/' + c.e.obtener('productoId') + '/variantes', { cuerpo: { titulo: 'Dup', sku: c.e.obtener('sku'), precio: 10 } }); }, espera: { estado: 422, codigo: 'CAT-003' } },
+          { titulo: 'Producto inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/catalogo/productos/' + inexistente + '/variantes', { cuerpo: { titulo: 'x', sku: 'LAB-' + Lab.azar(5), precio: 10 } }); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'var-editar', metodo: 'PUT', ruta: '/panel/catalogo/variantes/{id}', titulo: 'Editar una variante', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        notas: ['No cambia el stock: eso es del módulo Inventario.'],
+        casos: [
+          { titulo: 'Cambiar precio', tipo: 'ok', necesita: base.concat(['varianteId']), campos: [{ k: 'precio', etiqueta: 'Precio', tipo: 'numero', valor: 55 }],
+            peticion: function (c) { return P('PUT', '/panel/catalogo/variantes/' + c.e.obtener('varianteId'), { cuerpo: { titulo: 'Única', sku: c.e.obtener('sku'), precio: c.v.precio, requiere_envio: true } }); }, espera: { estado: 200 } },
+          { titulo: 'Comparación menor al precio', tipo: 'error', necesita: base.concat(['varianteId']), peticion: function (c) { return P('PUT', '/panel/catalogo/variantes/' + c.e.obtener('varianteId'), { cuerpo: { titulo: 'Única', sku: c.e.obtener('sku'), precio: 100, precio_comparacion: 1 } }); }, espera: { estado: 422, codigo: 'CAT-004' } },
+          { titulo: 'Variante inexistente', tipo: 'error', peticion: function () { return P('PUT', '/panel/catalogo/variantes/' + inexistente, { cuerpo: { titulo: 'x', sku: 'LAB-X', precio: 5 } }); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'var-borrar', metodo: 'DELETE', ruta: '/panel/catalogo/variantes/{id}', titulo: 'Eliminar una variante', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        notas: ['No se puede eliminar la última variante de un producto (`CAT-001`).'],
+        casos: [
+          { titulo: 'Eliminar la variante extra', tipo: 'ok', manual: true, necesita: base.concat(['varianteExtraId']), peticion: function (c) { return P('DELETE', '/panel/catalogo/variantes/' + c.e.obtener('varianteExtraId')); }, espera: { estado: 200 }, despues: function (r, c) { c.e.poner('varianteExtraId', ''); } },
+          { titulo: 'Variante inexistente', tipo: 'error', peticion: function () { return P('DELETE', '/panel/catalogo/variantes/' + inexistente); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'publicar', metodo: 'POST', ruta: '/panel/catalogo/productos/{id}/publicar', titulo: 'Publicar', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Hace visible el producto en la vitrina.',
+        notas: ['Exige título, al menos una variante con precio > 0 y una **imagen principal**; si falta algo, `CAT-007` lista qué.'],
+        casos: [
+          { titulo: 'Publicar el producto', tipo: 'ok', necesita: base.concat(['productoId']), descripcion: 'Si aún no tiene imagen principal verás CAT-007; agrégala arriba y repite.', peticion: function (c) { return P('POST', '/panel/catalogo/productos/' + c.e.obtener('productoId') + '/publicar'); }, espera: { estado: [200, 422], codigo: undefined } },
+          { titulo: 'Producto sin imagen', tipo: 'error', descripcion: 'Crea un producto nuevo sin imagen y lo intenta publicar.', manual: true,
+            peticion: function (c) { return P('POST', '/panel/catalogo/productos', { cuerpo: { titulo: 'Sin imagen ' + Lab.azar(3), variantes: [{ titulo: 'U', sku: 'LAB-' + Lab.azar(6).toUpperCase(), precio: 10, requiere_envio: false }] } }); },
+            espera: { estado: 201 },
+            despues: function (r, c) {
+              return c.pedir(P('POST', '/panel/catalogo/productos/' + r.json.datos.id + '/publicar')).then(function (p) {
+                if (p.estado !== 422 || !p.json || p.json.codigo !== 'CAT-007') { throw new Error('Se esperaba 422 CAT-007 al publicar sin imagen y llegó ' + p.estado); }
+                c.log && c.log('Publicar sin imagen respondió 422 CAT-007: ' + p.json.mensaje);
+              });
+            } },
+          { titulo: 'Producto inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/catalogo/productos/' + inexistente + '/publicar'); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'vit-categorias', metodo: 'GET', ruta: '/vitrina/{subdominio}/categorias', titulo: 'Categorías de la vitrina', acceso: 'público', necesita: ['subdominio'],
+        sirve: 'Solo categorías que tienen productos publicados.',
+        casos: [
+          { titulo: 'Listar', tipo: 'ok', peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/categorias', sesion: false }; }, espera: { estado: 200 } },
+          { titulo: 'Tienda inexistente', tipo: 'error', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/vitrina/no-existe-' + Lab.azar(6) + '/categorias', sesion: false }; }, espera: { estado: 404, codigo: 'TIE-404' } }
+        ]
+      },
+      {
+        id: 'vit-productos', metodo: 'GET', ruta: '/vitrina/{subdominio}/productos', titulo: 'Productos de la vitrina', acceso: 'público', necesita: ['subdominio'],
+        sirve: 'Productos publicados, paginados; nunca expone costos. Filtros: `texto`, `categoria`, `orden`.',
+        casos: [
+          { titulo: 'Listar', tipo: 'ok', peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/productos', sesion: false, query: { pagina: 0 } }; }, espera: { estado: 200 } },
+          { titulo: 'Buscar por texto', tipo: 'ok', campos: [{ k: 'texto', etiqueta: 'Texto', valor: 'Lab' }], peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/productos', sesion: false, query: { texto: c.v.texto } }; }, espera: { estado: 200 } },
+          { titulo: 'Tienda inexistente', tipo: 'error', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/vitrina/no-existe-' + Lab.azar(6) + '/productos', sesion: false }; }, espera: { estado: 404, codigo: 'TIE-404' } }
+        ]
+      },
+      {
+        id: 'vit-detalle', metodo: 'GET', ruta: '/vitrina/{subdominio}/productos/{slug}', titulo: 'Detalle de un producto', acceso: 'público', necesita: ['subdominio'],
+        sirve: 'Producto por su `identificador_url`; de aquí sale el `variante_id` para el carrito.',
+        casos: [
+          { titulo: 'Ver el producto publicado', tipo: 'ok', necesita: ['subdominio', 'slug'], peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/productos/' + c.e.obtener('slug'), sesion: false }; }, espera: { estado: 200 } },
+          { titulo: 'Producto inexistente', tipo: 'error', peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/productos/no-existe-' + Lab.azar(6), sesion: false }; }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'despublicar', metodo: 'POST', ruta: '/panel/catalogo/productos/{id}/despublicar', titulo: 'Despublicar', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Despublicar', tipo: 'ok', necesita: base.concat(['productoId']), peticion: function (c) { return P('POST', '/panel/catalogo/productos/' + c.e.obtener('productoId') + '/despublicar'); }, espera: { estado: 200 } },
+          { titulo: 'Producto inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/catalogo/productos/' + inexistente + '/despublicar'); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      },
+      {
+        id: 'prod-borrar', metodo: 'DELETE', ruta: '/panel/catalogo/productos/{id}', titulo: 'Eliminar un producto', acceso: 'permiso CATALOGO_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Eliminación lógica: deja de verse en el panel y la vitrina.',
+        casos: [
+          { titulo: 'Eliminar el producto del estado', tipo: 'ok', manual: true, necesita: base.concat(['productoId']), peticion: function (c) { return P('DELETE', '/panel/catalogo/productos/' + c.e.obtener('productoId')); }, espera: { estado: 200 }, despues: function (r, c) { ['productoId', 'varianteId', 'slug', 'sku'].forEach(function (k) { c.e.poner(k, ''); }); } },
+          { titulo: 'Producto inexistente', tipo: 'error', peticion: function () { return P('DELETE', '/panel/catalogo/productos/' + inexistente); }, espera: { estado: 404, codigo: 'CAT-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Métricas · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var base = ['token', 'tiendaId'];
+  function M(query, extra) { var o = { metodo: 'GET', ruta: '/panel/metricas', tienda: true, query: query }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  Lab.pagina({
+    archivo: 'metricas.html',
+    titulo: 'Métricas',
+    descripcion: 'Resumen de ventas de la tienda: totales del período, serie por día y productos más vendidos. Se calcula en la zona horaria de la tienda.',
+    avisos: [
+      'Con una tienda recién creada las cifras salen en cero: usa la receta «Todo de una vez» (en cualquier página de venta) para generar una orden pagada.',
+      'Las fechas son `AAAA-MM-DD`. Sin `desde`/`hasta` se usa el período por defecto del servidor; el máximo es **366 días**.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.ordenCompleta],
+    endpoints: [
+      {
+        id: 'metricas', metodo: 'GET', ruta: '/panel/metricas', titulo: 'Métricas del período', acceso: 'permiso METRICAS_VER', cabeceras: 'X-Tienda-Id', necesita: base,
+        casos: [
+          { titulo: 'Período por defecto', tipo: 'ok', peticion: function () { return M({}); }, espera: { estado: 200 } },
+          { titulo: 'Últimos 7 días', tipo: 'ok', campos: [{ k: 'desde', etiqueta: 'Desde', valor: function () { return Lab.fecha(-7); } }, { k: 'hasta', etiqueta: 'Hasta', valor: function () { return Lab.fecha(0); } }],
+            peticion: function (c) { return M({ desde: c.v.desde, hasta: c.v.hasta }); }, espera: { estado: 200 } },
+          { titulo: 'Rango mayor a 366 días', tipo: 'validacion', peticion: function () { return M({ desde: '2024-01-01', hasta: Lab.fecha(0) }); }, espera: { estado: [400, 422] } },
+          { titulo: 'Desde posterior a hasta', tipo: 'validacion', peticion: function () { return M({ desde: Lab.fecha(0), hasta: Lab.fecha(-5) }); }, espera: { estado: [400, 422] } },
+          { titulo: 'Fecha mal escrita', tipo: 'validacion', peticion: function () { return M({ desde: '01/11/2026' }); }, espera: { estado: [400, 422] } },
+          { titulo: 'Sin X-Tienda-Id', tipo: 'validacion', peticion: function () { return { metodo: 'GET', ruta: '/panel/metricas' }; }, espera: { estado: 400, codigo: 'SEG-001' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function () { return M({}, { sesion: false }); }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>
