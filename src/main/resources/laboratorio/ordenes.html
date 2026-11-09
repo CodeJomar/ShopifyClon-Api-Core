@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Órdenes · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var base = ['token', 'tiendaId'];
+  var conOrden = base.concat(['ordenId']);
+  function P(metodo, ruta, extra) { var o = { metodo: metodo, ruta: ruta, tienda: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+
+  Lab.pagina({
+    archivo: 'ordenes.html',
+    titulo: 'Órdenes',
+    descripcion: 'Consultar las órdenes: el listado y detalle del panel, «mis compras» del comprador con cuenta y el estado público por token de acceso.',
+    avisos: [
+      'Para tener una orden: receta «Todo de una vez» (tienda, tarifa, producto, carrito y compra) o los pasos sueltos hasta «Comprar el carrito». La orden queda en el estado como `ordenId`, `numeroOrden` y `tokenAcceso`.',
+      'Estados de la orden: `ABIERTA`, `CERRADA`, `CANCELADA`; de pago: `PENDIENTE`, `PAGADO`, `REEMBOLSADO`…; de preparación: `SIN_PREPARAR`, `PREPARADA`, `ENTREGADA`.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearTarifa, R.crearProducto, R.crearCarrito, R.hacerCheckout],
+    endpoints: [
+      {
+        id: 'listar', metodo: 'GET', ruta: '/panel/ordenes', titulo: 'Listar las órdenes de la tienda', acceso: 'permiso ORDENES_VER', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Paginado (`datos.datos`) con filtros `estado`, `estado_pago`, `estado_preparacion`, fechas y texto.',
+        casos: [
+          { titulo: 'Primera página', tipo: 'ok', peticion: function () { return P('GET', '/panel/ordenes', { query: { pagina: 0 } }); }, espera: { estado: 200 } },
+          { titulo: 'Pendientes de pago', tipo: 'ok', peticion: function () { return P('GET', '/panel/ordenes', { query: { estado_pago: 'PENDIENTE' } }); }, espera: { estado: 200 } },
+          { titulo: 'Filtro con valor inválido', tipo: 'validacion', peticion: function () { return P('GET', '/panel/ordenes', { query: { estado: 'XYZ' } }); }, espera: { estado: [400, 422], codigo: 'VAL-003' } },
+          { titulo: 'Sin X-Tienda-Id', tipo: 'validacion', peticion: function () { return { metodo: 'GET', ruta: '/panel/ordenes' }; }, espera: { estado: 400, codigo: 'SEG-001' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function () { return { metodo: 'GET', ruta: '/panel/ordenes', sesion: false, tienda: true }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'detalle', metodo: 'GET', ruta: '/panel/ordenes/{ordenId}', titulo: 'Detalle de una orden', acceso: 'permiso ORDENES_VER', cabeceras: 'X-Tienda-Id', necesita: conOrden,
+        sirve: 'Líneas, totales, cliente, `direccion_envio` (con coordenadas), pagos y estados.',
+        casos: [
+          { titulo: 'Ver la orden del estado', tipo: 'ok', peticion: function (c) { return P('GET', '/panel/ordenes/' + c.e.obtener('ordenId')); }, espera: { estado: 200 } },
+          { titulo: 'Orden inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/ordenes/' + inexistente); }, espera: { estado: 404, codigo: 'ORD-404' } },
+          { titulo: 'Id que no es UUID', tipo: 'validacion', peticion: function () { return P('GET', '/panel/ordenes/abc'); }, espera: { estado: [400, 422] } }
+        ]
+      },
+      {
+        id: 'mis-ordenes', metodo: 'GET', ruta: '/cuenta/ordenes', titulo: 'Mis compras', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Las órdenes hechas con esta cuenta (checkout con `Authorization`). Las de invitado no aparecen.',
+        casos: [
+          { titulo: 'Listar mis compras', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/cuenta/ordenes', query: { pagina: 0 } }; }, espera: { estado: 200 } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/cuenta/ordenes', sesion: false }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'mi-orden', metodo: 'GET', ruta: '/cuenta/ordenes/{ordenId}', titulo: 'Una de mis compras', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Detalle de una orden **tuya**. Una orden ajena responde 404 (no se revela que existe).',
+        casos: [
+          { titulo: 'Orden que no es mía o no existe', tipo: 'seguridad', peticion: function () { return { metodo: 'GET', ruta: '/cuenta/ordenes/' + inexistente }; }, espera: { estado: 404, codigo: 'ORD-404' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/cuenta/ordenes/' + inexistente, sesion: false }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'publica', metodo: 'GET', ruta: '/vitrina/{subdominio}/ordenes/{tokenAcceso}', titulo: 'Estado de la orden (invitado)', acceso: 'público', necesita: ['subdominio', 'tokenAcceso'],
+        sirve: 'El comprador sin cuenta consulta su orden con el `token_acceso` que recibió al comprar.',
+        notas: ['Un token incorrecto responde 404 `ORD-404`; nunca se distingue de una orden inexistente.'],
+        casos: [
+          { titulo: 'Con el token del checkout', tipo: 'ok', peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/ordenes/' + c.e.obtener('tokenAcceso'), sesion: false }; }, espera: { estado: 200 } },
+          { titulo: 'Token incorrecto', tipo: 'seguridad', necesita: ['subdominio'], peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/ordenes/token-falso-' + Lab.azar(8), sesion: false }; }, espera: { estado: 404, codigo: 'ORD-404' } },
+          { titulo: 'Tienda inexistente', tipo: 'error', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/vitrina/no-existe-' + Lab.azar(6) + '/ordenes/x', sesion: false }; }, espera: { estado: 404, codigo: 'TIE-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

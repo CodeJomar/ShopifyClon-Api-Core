@@ -15,6 +15,11 @@ public interface EnvioRepositorio extends JpaRepository<EnvioEntidad, UUID> {
 
     Optional<EnvioEntidad> findFirstByIdAndEliminadoFalse(UUID id);
 
+    boolean existsByNumeroGuia(String numeroGuia);
+
+    /** Seguimiento público: el envío más reciente con esa guía (las manuales no son únicas). */
+    Optional<EnvioEntidad> findFirstByNumeroGuiaAndEliminadoFalseOrderByFechaCreacionDesc(String numeroGuia);
+
     /** Bloqueo del envío para una transición (FOR UPDATE; se libera al commit). */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM EnvioEntidad e WHERE e.id = :id AND e.eliminado = FALSE")

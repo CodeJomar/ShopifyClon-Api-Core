@@ -52,6 +52,9 @@ public class SecurityConfig {
                         // Rutas públicas
                         .requestMatchers("/auth/**", "/vitrina/**", "/webhooks/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/planes").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/seguimiento/*").permitAll()
+                        // Laboratorio de endpoints (solo páginas estáticas; ver LaboratorioConfig)
+                        .requestMatchers(HttpMethod.GET, "/laboratorio", "/laboratorio/**").permitAll()
 
                         // Documentación OpenAPI / Swagger
                         .requestMatchers(

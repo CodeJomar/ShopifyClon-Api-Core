@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tienda y personal · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var idInexistente = '00000000-0000-0000-0000-000000000000';
+  var R = Lab.R;
+  function cuerpoTienda(c) {
+    return { nombre: c.v.nombre, subdominio: c.v.subdominio, correo_contacto: c.v.correo };
+  }
+  var camposTienda = function (sub) {
+    return [{ k: 'nombre', etiqueta: 'Nombre', valor: function () { return 'Tienda Lab ' + Lab.azar(4); } },
+      { k: 'subdominio', etiqueta: 'Subdominio', valor: sub || function () { return 'lab-' + Lab.azar(7); } },
+      { k: 'correo', etiqueta: 'Correo de contacto', valor: 'contacto@laboratorio.test' }];
+  };
+  var camposConfig = [
+    { k: 'nombre', etiqueta: 'Nombre', valor: 'Tienda de laboratorio' },
+    { k: 'correo', etiqueta: 'Correo de contacto', valor: 'contacto@laboratorio.test' },
+    { k: 'moneda', etiqueta: 'Moneda (3 letras mayúsculas)', valor: 'USD', ayuda: 'No se puede cambiar si la tienda ya tiene órdenes (TIE-005).' },
+    { k: 'tasa', etiqueta: 'Tasa de impuesto (0 a 0.50)', tipo: 'numero', valor: 0.18 },
+    { k: 'incluyen', etiqueta: '¿Los precios incluyen impuesto?', tipo: 'bool', valor: true },
+    { k: 'zona', etiqueta: 'Zona horaria (IANA)', valor: 'America/Lima' }
+  ];
+  function cuerpoConfig(c) {
+    return { nombre: c.v.nombre, correo_contacto: c.v.correo, moneda: c.v.moneda, tasa_impuesto: c.v.tasa, precios_incluyen_impuesto: c.v.incluyen, zona_horaria: c.v.zona };
+  }
+  function conCampo(lista, k, nuevo) { return lista.map(function (x) { return x.k === k ? nuevo : x; }); }
+
+  Lab.pagina({
+    archivo: 'tienda.html',
+    titulo: 'Tienda y personal',
+    descripcion: 'Crear una tienda (queda a tu nombre como propietario), configurarla, activarla o desactivarla, gestionar su personal con roles y ver su vitrina pública. Todo lo del panel necesita el encabezado X-Tienda-Id.',
+    avisos: [
+      'Para trabajar en una tienda hay que **elegirla**: el laboratorio manda su id en `X-Tienda-Id` automáticamente (barra de arriba). Usa «Usar mi primera tienda operativa» o crea una.',
+      'La **primera** tienda de un usuario recibe 14 días de prueba; **las siguientes nacen vencidas** (no operativas) y toda escritura del panel responde 409 `SUS-017` hasta pagar. La receta «Crear una tienda de prueba» la paga sola con la pasarela simulada.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda],
+    endpoints: [
+      {
+        id: 'crear', metodo: 'POST', ruta: '/cuenta/tiendas', titulo: 'Crear una tienda', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Crea la tienda, te agrega como PROPIETARIO, crea su balance y su suscripción, todo en una sola transacción.',
+        notas: ['El **subdominio** es la dirección pública (`/vitrina/{subdominio}`): 3–63 caracteres, minúsculas, números y guiones simples, sin empezar ni terminar con guion; no puede ser reservado (`admin`, `api`, `panel`…) y es único incluso frente a tiendas eliminadas.', 'Defaults: moneda USD, impuesto 18 % incluido, zona America/Lima, primera orden #1001.', 'Límite de 10 por minuto.'],
+        casos: [
+          { titulo: 'Crear una tienda', tipo: 'ok', descripcion: 'Queda como tienda activa del laboratorio; si nace vencida, se paga sola con la pasarela simulada.', campos: camposTienda(),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/cuenta/tiendas', cuerpo: cuerpoTienda(c) }; }, espera: { estado: 201 },
+            despues: function (r, c) { c.e.poner('tiendaId', r.json.datos.id); c.e.poner('subdominio', r.json.datos.subdominio); c.e.poner('rolTienda', 'PROPIETARIO'); return Lab.pagarTiendaNueva(c, r.json.datos); } },
+          { titulo: 'Subdominio reservado', tipo: 'error', campos: camposTienda('admin'),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/cuenta/tiendas', cuerpo: cuerpoTienda(c) }; }, espera: { estado: 422, codigo: 'TIE-001', contiene: 'reservado' } },
+          { titulo: 'Subdominio muy corto', tipo: 'error', campos: camposTienda('ab'),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/cuenta/tiendas', cuerpo: cuerpoTienda(c) }; }, espera: { estado: 422, codigo: 'TIE-001' } },
+          { titulo: 'Guiones dobles o espacios', tipo: 'error', campos: camposTienda('mi--tienda'),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/cuenta/tiendas', cuerpo: cuerpoTienda(c) }; }, espera: { estado: 422, codigo: 'TIE-001' } },
+          { titulo: 'Subdominio ya usado', tipo: 'error', necesita: ['subdominio'], descripcion: 'Intenta crear otra tienda con el subdominio de la tienda activa.',
+            campos: camposTienda(function (e) { return e.obtener('subdominio') || ''; }),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/cuenta/tiendas', cuerpo: cuerpoTienda(c) }; }, espera: { estado: 422, codigo: 'TIE-001', contiene: 'en uso' } },
+          { titulo: 'Plan que no existe', tipo: 'error', descripcion: 'SUS-015: no se crea nada (la transacción se deshace).',
+            peticion: function () { return { metodo: 'POST', ruta: '/cuenta/tiendas', cuerpo: { nombre: 'Tienda plan malo', subdominio: 'lab-' + Lab.azar(7), correo_contacto: 'a@laboratorio.test', codigo_plan: 'NO-EXISTE' } }; },
+            espera: { estado: 422, codigo: 'SUS-015' } },
+          { titulo: 'Faltan campos', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/cuenta/tiendas', cuerpo: { correo_contacto: 'no-es-correo' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'subdominio' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'POST', ruta: '/cuenta/tiendas', sesion: false, cuerpo: { nombre: 'x', subdominio: 'x-' + Lab.azar(5), correo_contacto: 'a@b.co' } }; },
+            espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'mis-tiendas', metodo: 'GET', ruta: '/cuenta/tiendas', titulo: 'Mis tiendas', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Lista las tiendas donde eres propietario o personal, con tu rol, si están activas y si están operativas.',
+        casos: [
+          { titulo: 'Listar', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/cuenta/tiendas' }; }, espera: { estado: 200 } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/cuenta/tiendas', sesion: false }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'ver-config', metodo: 'GET', ruta: '/panel/tienda', titulo: 'Ver la configuración de la tienda', acceso: 'miembro de la tienda', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Configuración completa y resumen de la suscripción. Cualquier miembro puede verla.',
+        notas: ['Si el `X-Tienda-Id` es de una tienda donde no eres miembro, responde **404** `SEG-001` (nunca 403: no se revela que existe).'],
+        casos: [
+          { titulo: 'Con la tienda activa', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/panel/tienda', tienda: true }; }, espera: { estado: 200 } },
+          { titulo: 'Sin X-Tienda-Id', tipo: 'validacion', descripcion: 'El panel exige el encabezado.', peticion: function () { return { metodo: 'GET', ruta: '/panel/tienda' }; }, espera: { estado: 400, codigo: 'SEG-001' } },
+          { titulo: 'Tienda ajena o inexistente', tipo: 'seguridad', peticion: function () { return { metodo: 'GET', ruta: '/panel/tienda', tienda: idInexistente }; }, espera: { estado: 404, codigo: 'SEG-001' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function () { return { metodo: 'GET', ruta: '/panel/tienda', sesion: false, tienda: true }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'editar-config', metodo: 'PUT', ruta: '/panel/tienda', titulo: 'Editar la configuración', acceso: 'permiso TIENDA_CONFIGURAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Cambia nombre, correo, dominio, moneda, impuesto, si los precios lo incluyen y la zona horaria.',
+        notas: ['Cambiar la **moneda** de una tienda con órdenes da 409 `TIE-005`.', 'Como toda escritura del panel, responde 409 `SUS-017` si la suscripción no permite operar.'],
+        casos: [
+          { titulo: 'Guardar configuración', tipo: 'ok', campos: camposConfig, peticion: function (c) { return { metodo: 'PUT', ruta: '/panel/tienda', tienda: true, cuerpo: cuerpoConfig(c) }; }, espera: { estado: 200 } },
+          { titulo: 'Impuesto fuera de rango', tipo: 'validacion', campos: conCampo(camposConfig, 'tasa', { k: 'tasa', etiqueta: 'Tasa', tipo: 'numero', valor: 0.51 }),
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/panel/tienda', tienda: true, cuerpo: cuerpoConfig(c) }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'tasa_impuesto' } },
+          { titulo: 'Zona horaria inválida', tipo: 'error', campos: conCampo(camposConfig, 'zona', { k: 'zona', etiqueta: 'Zona', valor: 'Marte/Olimpo' }),
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/panel/tienda', tienda: true, cuerpo: cuerpoConfig(c) }; }, espera: { estado: 422, codigo: 'TIE-006' } },
+          { titulo: 'Moneda en minúsculas', tipo: 'validacion', campos: conCampo(camposConfig, 'moneda', { k: 'moneda', etiqueta: 'Moneda', valor: 'usd' }),
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/panel/tienda', tienda: true, cuerpo: cuerpoConfig(c) }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'moneda' } },
+          { titulo: 'Sin X-Tienda-Id', tipo: 'validacion', campos: camposConfig, peticion: function (c) { return { metodo: 'PUT', ruta: '/panel/tienda', cuerpo: cuerpoConfig(c) }; }, espera: { estado: 400, codigo: 'SEG-001' } }
+        ]
+      },
+      {
+        id: 'vitrina', metodo: 'GET', ruta: '/vitrina/{subdominio}', titulo: 'Vitrina pública de la tienda', acceso: 'público', necesita: ['subdominio'],
+        sirve: 'Datos públicos: nombre, moneda, correo de contacto y si los precios incluyen impuesto. Nunca expone al propietario ni su suscripción.',
+        notas: ['Si la tienda no existe, está desactivada o su suscripción no permite operar, responde 404 `TIE-404` ("no está disponible").'],
+        casos: [
+          { titulo: 'Tienda activa', tipo: 'ok', peticion: function (c) { return { metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio'), sesion: false }; }, espera: { estado: 200 } },
+          { titulo: 'Tienda que no existe', tipo: 'error', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/vitrina/no-existe-' + Lab.azar(6), sesion: false }; }, espera: { estado: 404, codigo: 'TIE-404' } }
+        ]
+      },
+      {
+        id: 'desactivar', metodo: 'POST', ruta: '/panel/tienda/desactivar', titulo: 'Desactivar la tienda', acceso: 'solo el propietario', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'La vitrina deja de mostrarla (404) pero el panel sigue funcionando. Queda auditado.',
+        notas: ['Solo el propietario; un administrador recibe 403 `SEG-002`.', 'No exige suscripción vigente.', 'Después de desactivar, la caja «Vitrina pública» de arriba debería dar 404; reactiva abajo.'],
+        casos: [
+          { titulo: 'Desactivar con motivo', tipo: 'ok', campos: [{ k: 'motivo', etiqueta: 'Motivo (opcional, máx. 255)', valor: 'Prueba del laboratorio' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/panel/tienda/desactivar', tienda: true, cuerpo: { motivo: c.v.motivo } }; }, espera: { estado: 200 } },
+          { titulo: 'Motivo demasiado largo', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/panel/tienda/desactivar', tienda: true, cuerpo: { motivo: new Array(300).join('x') } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'motivo' } }
+        ]
+      },
+      {
+        id: 'activar', metodo: 'POST', ruta: '/panel/tienda/activar', titulo: 'Activar la tienda', acceso: 'solo el propietario', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Vuelve a mostrar la tienda en la vitrina (si su suscripción permite operar). Si ya estaba activa no hace nada ni audita.',
+        casos: [
+          { titulo: 'Activar', tipo: 'ok', peticion: function () { return { metodo: 'POST', ruta: '/panel/tienda/activar', tienda: true, cuerpo: {} }; }, espera: { estado: 200 } },
+          { titulo: 'Sin cuerpo', tipo: 'ok', descripcion: 'El cuerpo es opcional.', peticion: function () { return { metodo: 'POST', ruta: '/panel/tienda/activar', tienda: true }; }, espera: { estado: 200 } }
+        ]
+      },
+      {
+        id: 'personal-listar', metodo: 'GET', ruta: '/panel/personal', titulo: 'Listar el personal', acceso: 'permiso PERSONAL_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'El propietario primero, luego el resto con su rol y desde cuándo.',
+        casos: [{ titulo: 'Listar', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/panel/personal', tienda: true }; }, espera: { estado: 200 } }]
+      },
+      {
+        id: 'personal-agregar', metodo: 'POST', ruta: '/panel/personal', titulo: 'Agregar a una persona', acceso: 'permiso PERSONAL_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Agrega al personal a alguien que **ya tiene cuenta activa**, con el rol que elijas.',
+        notas: ['Roles asignables: `ADMINISTRADOR`, `GESTOR_CATALOGO`, `GESTOR_PEDIDOS`. `PROPIETARIO` nunca se asigna por aquí.', 'El plan limita cuánta gente puedes agregar (`PER-002`): BASICO permite 2 además del propietario.', 'Un ADMINISTRADOR no puede gestionar a otro ADMINISTRADOR (403 `PER-004`).'],
+        casos: [
+          { titulo: 'Agregar un usuario activo', tipo: 'ok', manual: true, descripcion: 'Escribe el correo de otra cuenta activa (por ejemplo una de datos-de-prueba.md).',
+            campos: [{ k: 'correo', etiqueta: 'Correo de la persona', valor: '' }, { k: 'rol', etiqueta: 'Rol', tipo: 'select', opciones: ['GESTOR_PEDIDOS', 'GESTOR_CATALOGO', 'ADMINISTRADOR'] }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/panel/personal', tienda: true, cuerpo: { correo_electronico: c.v.correo, rol: c.v.rol } }; }, espera: { estado: 201 },
+            despues: function (r, c) { c.e.poner('personalId', r.json.datos.usuario_id); } },
+          { titulo: 'Correo sin cuenta activa', tipo: 'error', peticion: function () { return { metodo: 'POST', ruta: '/panel/personal', tienda: true, cuerpo: { correo_electronico: 'nadie-' + Lab.azar(6) + '@laboratorio.test', rol: 'GESTOR_PEDIDOS' } }; },
+            espera: { estado: 422, codigo: 'PER-001' } },
+          { titulo: 'Agregar al propietario', tipo: 'error', necesita: ['correo'], descripcion: 'El propietario ya es parte del personal (tu correo de sesión).',
+            peticion: function (c) { return { metodo: 'POST', ruta: '/panel/personal', tienda: true, cuerpo: { correo_electronico: c.e.obtener('correo'), rol: 'ADMINISTRADOR' } }; }, espera: { estado: 409, codigo: 'PER-006' } },
+          { titulo: 'Asignar el rol PROPIETARIO', tipo: 'error', necesita: ['correo'],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/panel/personal', tienda: true, cuerpo: { correo_electronico: c.e.obtener('correo'), rol: 'PROPIETARIO' } }; }, espera: { estado: 422, codigo: 'PER-003' } },
+          { titulo: 'Rol que no existe', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/panel/personal', tienda: true, cuerpo: { correo_electronico: 'a@laboratorio.test', rol: 'SUPERJEFE' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'rol' } }
+        ]
+      },
+      {
+        id: 'personal-rol', metodo: 'PUT', ruta: '/panel/personal/{usuarioId}', titulo: 'Cambiar el rol de alguien', acceso: 'permiso PERSONAL_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Cambia el rol de un miembro; exige un motivo de 5 a 255 caracteres y queda auditado.',
+        casos: [
+          { titulo: 'Cambiar el rol de quien agregaste', tipo: 'ok', manual: true, necesita: ['token', 'tiendaId', 'personalId'], campos: [{ k: 'rol', etiqueta: 'Rol nuevo', tipo: 'select', opciones: ['GESTOR_CATALOGO', 'GESTOR_PEDIDOS', 'ADMINISTRADOR'] }],
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/panel/personal/' + c.e.obtener('personalId'), tienda: true, cuerpo: { rol: c.v.rol, motivo: 'Cambio desde el laboratorio' } }; }, espera: { estado: 200 } },
+          { titulo: 'Cambiarme el rol a mí mismo', tipo: 'error', necesita: ['token', 'tiendaId', 'usuarioId'], peticion: function (c) { return { metodo: 'PUT', ruta: '/panel/personal/' + c.e.obtener('usuarioId'), tienda: true, cuerpo: { rol: 'GESTOR_PEDIDOS', motivo: 'Prueba de PER-007' } }; },
+            espera: { estado: 422, codigo: 'PER-007' } },
+          { titulo: 'Persona que no es del personal', tipo: 'error', peticion: function () { return { metodo: 'PUT', ruta: '/panel/personal/' + idInexistente, tienda: true, cuerpo: { rol: 'GESTOR_PEDIDOS', motivo: 'Prueba del laboratorio' } }; },
+            espera: { estado: 404, codigo: 'PER-404' } },
+          { titulo: 'Motivo muy corto', tipo: 'validacion', peticion: function () { return { metodo: 'PUT', ruta: '/panel/personal/' + idInexistente, tienda: true, cuerpo: { rol: 'GESTOR_PEDIDOS', motivo: 'no' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'motivo' } }
+        ]
+      },
+      {
+        id: 'personal-quitar', metodo: 'DELETE', ruta: '/panel/personal/{usuarioId}', titulo: 'Quitar a alguien del personal', acceso: 'permiso PERSONAL_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Eliminación lógica con motivo obligatorio. La persona deja de poder entrar a la tienda.',
+        notas: ['Este DELETE **lleva cuerpo** `{ "motivo": "…" }`.'],
+        casos: [
+          { titulo: 'Quitar a quien agregaste', tipo: 'ok', manual: true, necesita: ['token', 'tiendaId', 'personalId'],
+            peticion: function (c) { return { metodo: 'DELETE', ruta: '/panel/personal/' + c.e.obtener('personalId'), tienda: true, cuerpo: { motivo: 'Quitado desde el laboratorio' } }; }, espera: { estado: 200 }, despues: function (r, c) { c.e.poner('personalId', ''); } },
+          { titulo: 'Quitarme a mí mismo', tipo: 'error', necesita: ['token', 'tiendaId', 'usuarioId'], peticion: function (c) { return { metodo: 'DELETE', ruta: '/panel/personal/' + c.e.obtener('usuarioId'), tienda: true, cuerpo: { motivo: 'Prueba de PER-007' } }; },
+            espera: { estado: 422, codigo: 'PER-007' } },
+          { titulo: 'Sin motivo', tipo: 'validacion', peticion: function () { return { metodo: 'DELETE', ruta: '/panel/personal/' + idInexistente, tienda: true, cuerpo: {} }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'motivo' } },
+          { titulo: 'Persona que no es del personal', tipo: 'error', peticion: function () { return { metodo: 'DELETE', ruta: '/panel/personal/' + idInexistente, tienda: true, cuerpo: { motivo: 'Prueba del laboratorio' } }; },
+            espera: { estado: 404, codigo: 'PER-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

@@ -136,6 +136,35 @@ class DireccionTest extends PruebaUsuarioBase {
     }
 
     @Test
+    void laDireccionGuardaElPuntoDeEntregaOpcional() throws Exception {
+        String token = cuentaActivaConToken(nuevoCorreo());
+        Map<String, Object> cuerpo = direccion("Con mapa", null);
+        cuerpo.put("latitud", -12.046374);
+        cuerpo.put("longitud", -77.042793);
+
+        UUID id = UUID.fromString(cuerpo(postJson(Rutas.CUENTA_DIRECCIONES, cuerpo, token, null)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.datos.latitud").value(-12.046374))
+                .andExpect(jsonPath("$.datos.longitud").value(-77.042793))).get("datos").get("id").asText());
+
+        // sin coordenadas sigue siendo válida y salen ausentes
+        UUID sin = crear(token, "Sin mapa", false);
+        JsonNode lista = cuerpo(getConToken(Rutas.CUENTA_DIRECCIONES, token, null)).get("datos");
+        for (JsonNode d : lista) {
+            if (d.get("id").asText().equals(sin.toString())) {
+                assertThat(d.has("latitud")).isFalse();
+            } else {
+                assertThat(d.get("id").asText()).isEqualTo(id.toString());
+            }
+        }
+
+        cuerpo.put("latitud", 95);
+        putJson(Rutas.cuentaDireccion(id), cuerpo, token, null)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.validaciones.latitud").exists());
+    }
+
+    @Test
     void camposObligatoriosSeValidan() throws Exception {
         String token = cuentaActivaConToken(nuevoCorreo());
 

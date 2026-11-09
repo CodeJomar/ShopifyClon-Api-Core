@@ -124,6 +124,8 @@ class CheckoutTest extends PruebaIntegracionBase {
         direccion.put("estado_provincia", "Lima");
         direccion.put("codigo_postal", "15001");
         direccion.put("pais", "PE");
+        direccion.put("latitud", -12.0464);
+        direccion.put("longitud", -77.0428);
         return direccion;
     }
 
@@ -450,6 +452,67 @@ class CheckoutTest extends PruebaIntegracionBase {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.codigo").value("VAL-001"));
         assertThat(ordenes()).isZero();
+    }
+
+    @Test
+    void conEnvioSinCoordenadasEsEnv007YNoCreaNada() throws Exception {
+        UUID fisico = variante(new BigDecimal("30.00"), true, 5);
+        UUID envio = tarifa("5.00", true);
+        String token = carrito();
+        agregar(token, fisico, 1);
+
+        for (String faltante : new String[]{"latitud", "longitud"}) {
+            Map<String, Object> cuerpo = pedido("35.00", envio);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> direccion = (Map<String, Object>) cuerpo.get("direccion_envio");
+            direccion.remove(faltante);
+
+            checkout(token, UUID.randomUUID().toString(), cuerpo)
+                    .andExpect(status().isUnprocessableEntity())
+                    .andExpect(jsonPath("$.codigo").value("ENV-007"))
+                    .andExpect(jsonPath("$.mensaje").value("Marca en el mapa el punto de entrega"));
+        }
+        assertThat(ordenes()).isZero();
+        assertThat(reservada(fisico)).isZero();
+    }
+
+    @Test
+    void coordenadasFueraDeRangoSon422Val001() throws Exception {
+        UUID fisico = variante(new BigDecimal("30.00"), true, 5);
+        UUID envio = tarifa("5.00", true);
+        String token = carrito();
+        agregar(token, fisico, 1);
+        Map<String, Object> cuerpo = pedido("35.00", envio);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> direccion = (Map<String, Object>) cuerpo.get("direccion_envio");
+        direccion.put("latitud", 91);
+
+        checkout(token, UUID.randomUUID().toString(), cuerpo)
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("VAL-001"));
+    }
+
+    @Test
+    void conCoordenadasLaOrdenLasGuardaYLasDevuelveEnElSeguimientoPublico() throws Exception {
+        UUID fisico = variante(new BigDecimal("30.00"), true, 5);
+        UUID envio = tarifa("5.00", true);
+        String token = carrito();
+        agregar(token, fisico, 1);
+
+        JsonNode creada = cuerpo(checkout(token, UUID.randomUUID().toString(), pedido("35.00", envio))
+                .andExpect(status().isCreated())).get("datos");
+
+        JsonNode snapshot = json.readTree(jdbc.queryForObject(
+                "SELECT \"DireccionEnvio\"::text FROM \"Ordenes\" WHERE \"Id\" = ?", String.class,
+                UUID.fromString(creada.get("orden_id").asText())));
+        assertThat(snapshot.get("latitud").decimalValue()).isEqualByComparingTo("-12.0464");
+        assertThat(snapshot.get("longitud").decimalValue()).isEqualByComparingTo("-77.0428");
+
+        JsonNode publica = cuerpo(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get(Rutas.vitrinaOrdenes(subdominio) + "/" + creada.get("token_acceso").asText()))
+                .andExpect(status().isOk())).get("datos");
+        assertThat(publica.get("direccion_envio").get("latitud").decimalValue()).isEqualByComparingTo("-12.0464");
+        assertThat(publica.get("direccion_envio").get("longitud").decimalValue()).isEqualByComparingTo("-77.0428");
     }
 
     @Test

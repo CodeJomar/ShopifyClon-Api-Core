@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var necesita = ['subdominio', 'carritoToken', 'tarifaId'];
+  function direccion(extra) {
+    var d = { nombre_contacto: 'Comprador Laboratorio', telefono: '999888777', direccion_linea1: 'Av. Siempre Viva 123', ciudad: 'Lima', estado_provincia: 'Lima', codigo_postal: '15001', pais: 'PE', latitud: -12.0464, longitud: -77.0428 };
+    for (var k in (extra || {})) { if (extra[k] === null) { delete d[k]; } else { d[k] = extra[k]; } }
+    return d;
+  }
+  function cotizar(c, opciones) {
+    return c.pedir({ metodo: 'GET', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/carrito', sesion: false, carrito: true, query: { tarifa_envio_id: c.e.obtener('tarifaId') } })
+      .then(function (r) { return c.exigir(r, 200, 'Cotizar el carrito').total_estimado; });
+  }
+  function checkout(c, cuerpo, extra) {
+    var o = { metodo: 'POST', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/checkout', carrito: true, idem: true, cuerpo: cuerpo };
+    for (var k in (extra || {})) { o[k] = extra[k]; }
+    return o;
+  }
+  // Los casos que dependen del total lo cotizan antes (así el laboratorio no obliga a copiarlo a mano).
+  function caso(titulo, tipo, espera, armar, descripcion, extra) {
+    var o = {
+      titulo: titulo, tipo: tipo, descripcion: descripcion, necesita: necesita, espera: espera,
+      campos: [{ k: 'total', etiqueta: 'total_esperado (se rellena solo al ejecutar si lo dejas vacío)', tipo: 'numero', valor: '' }],
+      antes: function (c) { if (c.v.total === '' || c.v.total === undefined) { return cotizar(c).then(function (t) { c.total = t; }); } c.total = c.v.total; },
+      peticion: function (c) { var cuerpo = armar(c); var p = checkout(c, cuerpo.cuerpo || cuerpo, cuerpo.extra); return p; }
+    };
+    for (var k in (extra || {})) { o[k] = extra[k]; }
+    return o;
+  }
+  function cuerpoBase(c, cambios) {
+    var b = { correo_cliente: 'comprador-' + Lab.azar(4) + '@laboratorio.test', nombre_cliente: 'Comprador Laboratorio', telefono_cliente: '999888777', direccion_envio: direccion(), tarifa_envio_id: c.e.obtener('tarifaId'), pasarela: 'MANUAL', total_esperado: c.total };
+    for (var k in (cambios || {})) { b[k] = cambios[k]; }
+    return b;
+  }
+  function guardar(r, c) {
+    var d = r.json.datos;
+    c.e.poner('ordenId', d.orden_id); c.e.poner('numeroOrden', d.numero_orden); c.e.poner('tokenAcceso', d.token_acceso); c.e.poner('totalOrden', d.total);
+  }
+
+  Lab.pagina({
+    archivo: 'checkout.html',
+    titulo: 'Checkout',
+    descripcion: 'Convierte el carrito en una **orden**: reserva el stock, consume el cupón y fija el total. Es público (sin cuenta); si mandas sesión, la orden queda ligada a tu usuario.',
+    avisos: [
+      'Necesitas un carrito con productos (página Carrito) y una tarifa de envío. Los casos **cotizan solos** el `total_esperado` antes de enviar; el envío se hace con pasarela `MANUAL` (el pago lo registra el personal en «Pagos y reembolsos»).',
+      'Cada intento usa un `Idempotency-Key` **nuevo** (UUID). Reusar la misma clave con el mismo carrito devuelve la **misma orden** (200 en vez de 201).',
+      'Un carrito se convierte **una sola vez**: tras un checkout exitoso hay que crear otro carrito (`CAR-008`). Los casos de error se pueden ejecutar antes, con el carrito aún sin convertir; el caso de éxito va el último.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearTarifa, R.crearProducto, R.crearCarrito, R.hacerCheckout],
+    endpoints: [
+      {
+        id: 'checkout', metodo: 'POST', ruta: '/vitrina/{subdominio}/checkout', titulo: 'Confirmar la compra', acceso: 'público', cabeceras: 'X-Carrito-Token, Idempotency-Key', necesita: necesita,
+        sirve: 'Crea la orden desde el carrito. Respuesta: `orden_id`, `numero_orden` (#1001…), `total`, `token_acceso` y `fecha_expiracion_pago`.',
+        notas: [
+          '**Para que funcione**: cabeceras `X-Carrito-Token` e `Idempotency-Key` (UUID nuevo por intento) y cuerpo con `correo_cliente`, `nombre_cliente`, `direccion_envio`, `tarifa_envio_id`, `pasarela` (`MANUAL`/`STRIPE`) y `total_esperado`.',
+          '`total_esperado` debe ser el `total_estimado` de `GET …/carrito?tarifa_envio_id=` (misma tarifa y cupón); si no coincide: 409 `CHK-004` con `detalles.total_recalculado`.',
+          'Si hay líneas con envío, `direccion_envio` lleva `latitud` y `longitud` (punto del mapa); sin ellas, 422 `ENV-007`.',
+          'Guarda el `token_acceso`: es lo que usa el comprador invitado para ver su orden.',
+          'La orden vence si no se paga: 48 h con pago manual, 30 min con Stripe.'
+        ],
+        casos: [
+          caso('Total que no coincide', 'error', { estado: 409, codigo: 'CHK-004' }, function (c) { return cuerpoBase(c, { total_esperado: 1 }); }, 'Manda total_esperado = 1; el servidor responde con el total real en detalles.total_recalculado.', { campos: [] , antes: function (c) { c.total = 1; } }),
+          caso('Sin punto en el mapa (ENV-007)', 'error', { estado: 422, codigo: 'ENV-007' }, function (c) { return cuerpoBase(c, { direccion_envio: direccion({ latitud: null, longitud: null }) }); }),
+          caso('Sin dirección de envío', 'error', { estado: 422 }, function (c) { var b = cuerpoBase(c); delete b.direccion_envio; return b; }),
+          caso('Tarifa de envío que no existe', 'error', { estado: 409, codigo: 'ENV-001' }, function (c) { return cuerpoBase(c, { tarifa_envio_id: inexistente }); }),
+          caso('Latitud fuera de rango', 'validacion', { estado: 422 }, function (c) { return cuerpoBase(c, { direccion_envio: direccion({ latitud: 123 }) }); }),
+          caso('Correo inválido', 'validacion', { estado: 422, codigo: 'VAL-001', validacion: 'correo_cliente' }, function (c) { return cuerpoBase(c, { correo_cliente: 'no-es-un-correo' }); }),
+          caso('Pasarela desconocida', 'validacion', { estado: [400, 422] }, function (c) { return cuerpoBase(c, { pasarela: 'PAYPAL' }); }),
+          caso('Sin Idempotency-Key', 'validacion', { estado: 400, codigo: 'CHK-007' }, function (c) { return cuerpoBase(c); }, 'Sin la cabecera, CHK-007.', { peticion: function (c) { return checkout(c, cuerpoBase(c), { idem: false }); } }),
+          caso('Idempotency-Key que no es UUID', 'validacion', { estado: 400, codigo: 'CHK-007' }, function (c) { return cuerpoBase(c); }, 'La clave debe ser un UUID.', { peticion: function (c) { return checkout(c, cuerpoBase(c), { idem: 'clave-no-uuid' }); } }),
+          caso('Carrito de otra tienda o inexistente', 'seguridad', { estado: 404, codigo: 'CAR-404' }, function (c) { return cuerpoBase(c); }, undefined, { peticion: function (c) { return checkout(c, cuerpoBase(c), { carrito: inexistente }); } }),
+          caso('Compra exitosa (pago manual)', 'ok', { estado: 201 }, function (c) { return cuerpoBase(c); }, 'Consume el carrito: después debes crear otro. Guarda ordenId, numeroOrden y tokenAcceso.', { manual: true, despues: guardar }),
+          caso('Reintentar con la misma clave', 'ok', { estado: [200, 201, 409] }, function (c) { return cuerpoBase(c); }, 'Va con una clave nueva: como el carrito ya se convirtió responde CAR-008 (409). Para ver el 200 idempotente reenvía EXACTAMENTE la misma petición con el mismo Idempotency-Key.', { manual: true })
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

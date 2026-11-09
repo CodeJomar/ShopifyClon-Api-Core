@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Suscripción · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var campoCiclo = { k: 'ciclo', etiqueta: 'Ciclo', tipo: 'select', opciones: ['MENSUAL', 'ANUAL'] };
+  Lab.pagina({
+    archivo: 'suscripcion.html',
+    titulo: 'Suscripción',
+    descripcion: 'Planes públicos y la suscripción de la tienda: pagar, cambiar de plan, cancelar y revertir la cancelación. Solo el propietario puede gestionarla.',
+    avisos: [
+      'El cobro usa una **pasarela simulada**: cualquier token de pago se acepta salvo `tok_rechazar`, que responde 422 `SUS-004`. Usa `tok_lab` para pagar.',
+      '**SUS-017**: si la suscripción no permite operar (vencida, suspendida o cancelada), toda escritura del panel responde 409 `SUS-017`; leer sigue funcionando y pagar sirve para recuperarla.',
+      'Estados: `PRUEBA` → `ACTIVA` → `VENCIDA` / `CANCELADA`; la plataforma puede dejarla `SUSPENDIDA`.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda],
+    endpoints: [
+      {
+        id: 'planes', metodo: 'GET', ruta: '/planes', titulo: 'Catálogo público de planes', acceso: 'público',
+        sirve: 'Lista los planes públicos con precio mensual y anual, límites de productos y personal, comisión y días de prueba.',
+        notas: ['Los planes retirados o no públicos no aparecen, aunque una tienda aún los use.'],
+        casos: [{ titulo: 'Listar planes', tipo: 'ok', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/planes', sesion: false }; }, espera: { estado: 200 },
+          despues: function (r, c) { var p = r.json.datos || []; if (p.length) { c.e.poner('codigoPlan', p[p.length - 1].codigo); } } }]
+      },
+      {
+        id: 'ver', metodo: 'GET', ruta: '/panel/suscripcion', titulo: 'Ver la suscripción', acceso: 'permiso SUSCRIPCION_GESTIONAR (propietario)', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Estado, plan, ciclo, precio pactado, período vigente, si hay cancelación programada y el uso frente a los límites (productos y personal).',
+        casos: [
+          { titulo: 'Ver mi suscripción', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/panel/suscripcion', tienda: true }; }, espera: { estado: 200 } },
+          { titulo: 'Sin X-Tienda-Id', tipo: 'validacion', peticion: function () { return { metodo: 'GET', ruta: '/panel/suscripcion' }; }, espera: { estado: 400, codigo: 'SEG-001' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function () { return { metodo: 'GET', ruta: '/panel/suscripcion', sesion: false, tienda: true }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'pagar', metodo: 'POST', ruta: '/panel/suscripcion/pagar', titulo: 'Pagar el período', acceso: 'permiso SUSCRIPCION_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Cobra el período y deja la suscripción ACTIVA. Sirve para activar una prueba, renovar una vencida o recuperar una tienda.',
+        notas: ['`codigo_plan` es opcional: sin él se usa el plan actual.', 'Si ya está activa y no ha vencido, responde 409 `SUS-004` ("ya está activa").', 'Esta ruta **no** exige suscripción operativa (si no, nadie podría pagar).'],
+        casos: [
+          { titulo: 'Pagar con tok_lab', tipo: 'ok', campos: [campoCiclo, { k: 'token', etiqueta: 'Token de pago', valor: 'tok_lab' }],
+            descripcion: 'Si la suscripción ya está activa y vigente verás 409 SUS-004 ("ya está activa"); es lo esperado.',
+            peticion: function (c) { return { metodo: 'POST', ruta: '/panel/suscripcion/pagar', tienda: true, cuerpo: { ciclo: c.v.ciclo, token_pago: c.v.token } }; }, espera: { estado: [200, 409] } },
+          { titulo: 'Pago rechazado', tipo: 'error', descripcion: 'El token tok_rechazar simula una tarjeta rechazada (422). Con la suscripción ya activa, el servidor responde antes 409 "ya está activa": ambos son SUS-004.',
+            peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/pagar', tienda: true, cuerpo: { ciclo: 'MENSUAL', token_pago: 'tok_rechazar' } }; }, espera: { estado: [409, 422], codigo: 'SUS-004' } },
+          { titulo: 'Plan que no existe', tipo: 'error', peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/pagar', tienda: true, cuerpo: { ciclo: 'MENSUAL', token_pago: 'tok_lab', codigo_plan: 'NO-EXISTE' } }; }, espera: { estado: 422, codigo: 'SUS-015' } },
+          { titulo: 'Ciclo inválido', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/pagar', tienda: true, cuerpo: { ciclo: 'SEMANAL', token_pago: 'tok_lab' } }; }, espera: { estado: [400, 422] } },
+          { titulo: 'Falta el token de pago', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/pagar', tienda: true, cuerpo: { ciclo: 'MENSUAL' } }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'token_pago' } }
+        ]
+      },
+      {
+        id: 'cambiar', metodo: 'POST', ruta: '/panel/suscripcion/cambiar-plan', titulo: 'Cambiar de plan', acceso: 'permiso SUSCRIPCION_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'En prueba cambia sin cobro; con la suscripción activa cobra el nuevo plan.',
+        notas: ['No se puede bajar a un plan cuyos límites ya superas (productos o personal): 422 `SUS-008`.', 'Elegir el mismo plan y ciclo también da `SUS-008`.'],
+        casos: [
+          { titulo: 'Cambiar de plan', tipo: 'ok', manual: true, necesita: ['token', 'tiendaId'], descripcion: 'Elige un código de «Catálogo público de planes». Puede dar 409 SUS-008 si ya tienes ese plan.',
+            campos: [{ k: 'plan', etiqueta: 'Código del plan', valor: function (e) { return e.obtener('codigoPlan') || 'BASICO'; } }, campoCiclo, { k: 'token', etiqueta: 'Token', valor: 'tok_lab' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/panel/suscripcion/cambiar-plan', tienda: true, cuerpo: { codigo_plan: c.v.plan, ciclo: c.v.ciclo, token_pago: c.v.token } }; }, espera: { estado: [200, 409, 422] } },
+          { titulo: 'Plan que no existe', tipo: 'error', peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/cambiar-plan', tienda: true, cuerpo: { codigo_plan: 'NO-EXISTE', ciclo: 'MENSUAL', token_pago: 'tok_lab' } }; }, espera: { estado: 422, codigo: 'SUS-015' } },
+          { titulo: 'Pago rechazado al cambiar', tipo: 'error', manual: true, descripcion: 'Solo cobra si la suscripción está ACTIVA; en prueba cambia sin cobro y el resultado puede ser 200.',
+            peticion: function (c) { return { metodo: 'POST', ruta: '/panel/suscripcion/cambiar-plan', tienda: true, cuerpo: { codigo_plan: c.e.obtener('codigoPlan') || 'BASICO', ciclo: 'ANUAL', token_pago: 'tok_rechazar' } }; }, espera: { estado: [200, 409, 422] } },
+          { titulo: 'Faltan campos', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/cambiar-plan', tienda: true, cuerpo: {} }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'codigo_plan' } }
+        ]
+      },
+      {
+        id: 'cancelar', metodo: 'POST', ruta: '/panel/suscripcion/cancelar', titulo: 'Cancelar la suscripción', acceso: 'permiso SUSCRIPCION_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'En prueba se cancela de inmediato; con la suscripción activa se programa al final del período y puedes revertirla.',
+        notas: ['Exige un motivo de 5 a 255 caracteres.', '⚠️ En una tienda en prueba la cancelación es **inmediata** y deja la tienda sin poder operar: usa una tienda de prueba creada para esto.'],
+        casos: [
+          { titulo: 'Cancelar con motivo', tipo: 'ok', manual: true, campos: [{ k: 'motivo', etiqueta: 'Motivo', valor: 'Prueba del laboratorio' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/panel/suscripcion/cancelar', tienda: true, cuerpo: { motivo: c.v.motivo } }; }, espera: { estado: [200, 409, 422] } },
+          { titulo: 'Motivo muy corto', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/cancelar', tienda: true, cuerpo: { motivo: 'no' } }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'motivo' } }
+        ]
+      },
+      {
+        id: 'revertir', metodo: 'POST', ruta: '/panel/suscripcion/revertir-cancelacion', titulo: 'Revertir la cancelación', acceso: 'permiso SUSCRIPCION_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: ['token', 'tiendaId'],
+        sirve: 'Anula una cancelación programada para el final del período.',
+        casos: [
+          { titulo: 'Revertir', tipo: 'ok', descripcion: 'Sin cancelación programada responde 409 SUS-009; es lo esperado.', peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/revertir-cancelacion', tienda: true }; }, espera: { estado: [200, 409] } },
+          { titulo: 'Sin X-Tienda-Id', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/panel/suscripcion/revertir-cancelacion' }; }, espera: { estado: 400, codigo: 'SEG-001' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

@@ -146,7 +146,8 @@ public abstract class PruebaIntegracionBase {
     }
 
     protected com.fasterxml.jackson.databind.JsonNode cuerpo(ResultActions resultado) throws Exception {
-        return json.readTree(resultado.andReturn().getResponse().getContentAsString());
+        // La respuesta es UTF-8; sin indicarlo, MockHttpServletResponse decodifica como ISO-8859-1 y rompe las tildes
+        return json.readTree(resultado.andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private MockHttpServletRequestBuilder conCabeceras(MockHttpServletRequestBuilder peticion, String jwt, UUID tiendaId) {

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plataforma · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var idInexistente = '00000000-0000-0000-0000-000000000000';
+  var camposPlan = function (codigo) {
+    return [
+      { k: 'codigo', etiqueta: 'Código (A-Z y _, 3-30)', valor: codigo || function () { return 'LAB_' + Lab.azar(5).toUpperCase().replace(/[^A-Z]/g, 'X'); } },
+      { k: 'nombre', etiqueta: 'Nombre', valor: 'Plan de laboratorio' },
+      { k: 'mensual', etiqueta: 'Precio mensual', tipo: 'numero', valor: 10 },
+      { k: 'anual', etiqueta: 'Precio anual', tipo: 'numero', valor: 100 },
+      { k: 'moneda', etiqueta: 'Moneda', valor: 'USD' },
+      { k: 'personal', etiqueta: 'Límite de personal', tipo: 'numero', valor: 3 },
+      { k: 'comision', etiqueta: 'Comisión (0 a 0.10)', tipo: 'numero', valor: 0.02 },
+      { k: 'publico', etiqueta: '¿Público?', tipo: 'bool', valor: false }
+    ];
+  };
+  function cuerpoPlan(c, conCodigo) {
+    var b = { nombre: c.v.nombre, precio_mensual: c.v.mensual, precio_anual: c.v.anual, moneda: c.v.moneda, limite_productos: 50, limite_personal: c.v.personal, porcentaje_comision: c.v.comision, dias_prueba: 14, es_publico: c.v.publico, orden: 99 };
+    if (conCodigo) { b.codigo = c.v.codigo; }
+    return b;
+  }
+  function conCampo(lista, k, nuevo) { return lista.map(function (x) { return x.k === k ? nuevo : x; }); }
+  var soloAdmin = ['token', 'esAdminPlataforma'];
+
+  Lab.pagina({
+    archivo: 'plataforma.html',
+    titulo: 'Plataforma (administrador)',
+    descripcion: 'Endpoints exclusivos del administrador de la plataforma: catálogo completo de planes y gestión de suscripciones (suspender / reactivar tiendas).',
+    avisos: [
+      'Inicia sesión en «Cuenta y sesión» con la cuenta de administrador de plataforma (`admin.prueba@otemu.test`, ver `datos-de-prueba.md`). Con cualquier otra cuenta todo responde **403** `SEG-002`.',
+      'Estos endpoints **no** llevan `X-Tienda-Id`. Para suspender/reactivar necesitas el id de una tienda (la del laboratorio u otra): el campo viene precargado con la tienda activa del estado.'
+    ],
+    endpoints: [
+      {
+        id: 'planes-listar', metodo: 'GET', ruta: '/plataforma/planes', titulo: 'Listar todos los planes', acceso: 'administrador de plataforma', necesita: soloAdmin,
+        sirve: 'Incluye los planes no públicos y los retirados, con su visibilidad y orden.',
+        casos: [
+          { titulo: 'Listar', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/plataforma/planes' }; }, espera: { estado: 200 } },
+          { titulo: 'Con una cuenta normal', tipo: 'seguridad', necesita: ['token'], descripcion: 'Falla (403) cuando tu sesión NO es de administrador de plataforma.', manual: true,
+            peticion: function () { return { metodo: 'GET', ruta: '/plataforma/planes' }; }, espera: { estado: [200, 403] } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'GET', ruta: '/plataforma/planes', sesion: false }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'plan-crear', metodo: 'POST', ruta: '/plataforma/planes', titulo: 'Crear un plan', acceso: 'administrador de plataforma', necesita: soloAdmin,
+        sirve: 'Da de alta un plan nuevo en el catálogo. Por defecto es público y con orden 0.',
+        notas: ['El código no se puede cambiar después y no puede repetirse (422 `VAL-001`).', 'La comisión máxima es 10 % (0.10); los precios no pueden ser negativos.'],
+        casos: [
+          { titulo: 'Crear un plan', tipo: 'ok', campos: camposPlan(), peticion: function (c) { return { metodo: 'POST', ruta: '/plataforma/planes', cuerpo: cuerpoPlan(c, true) }; }, espera: { estado: 201 },
+            despues: function (r, c) { c.e.poner('codigoPlanLab', r.json.datos.codigo); } },
+          { titulo: 'Código repetido', tipo: 'error', necesita: soloAdmin.concat(['codigoPlanLab']), campos: camposPlan(function (e) { return e.obtener('codigoPlanLab') || ''; }),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/plataforma/planes', cuerpo: cuerpoPlan(c, true) }; }, espera: { estado: 422, codigo: 'VAL-001', contiene: 'Ya existe' } },
+          { titulo: 'Código en minúsculas', tipo: 'validacion', campos: camposPlan('mi plan'), peticion: function (c) { return { metodo: 'POST', ruta: '/plataforma/planes', cuerpo: cuerpoPlan(c, true) }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'codigo' } },
+          { titulo: 'Comisión sobre el 10 %', tipo: 'validacion', campos: conCampo(camposPlan(), 'comision', { k: 'comision', etiqueta: 'Comisión', tipo: 'numero', valor: 0.5 }),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/plataforma/planes', cuerpo: cuerpoPlan(c, true) }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'porcentaje_comision' } },
+          { titulo: 'Precio negativo', tipo: 'validacion', campos: conCampo(camposPlan(), 'mensual', { k: 'mensual', etiqueta: 'Precio mensual', tipo: 'numero', valor: -1 }),
+            peticion: function (c) { return { metodo: 'POST', ruta: '/plataforma/planes', cuerpo: cuerpoPlan(c, true) }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'precio_mensual' } }
+        ]
+      },
+      {
+        id: 'plan-editar', metodo: 'PUT', ruta: '/plataforma/planes/{codigo}', titulo: 'Editar un plan', acceso: 'administrador de plataforma', necesita: soloAdmin,
+        sirve: 'Cambia nombre, precios, límites, comisión, días de prueba, visibilidad y orden. No cambia el código.',
+        notas: ['Los cambios no afectan el precio ya pactado por las tiendas suscritas.'],
+        casos: [
+          { titulo: 'Editar el plan creado', tipo: 'ok', necesita: soloAdmin.concat(['codigoPlanLab']), campos: camposPlan('x').filter(function (x) { return x.k !== 'codigo'; }),
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/plataforma/planes/' + c.e.obtener('codigoPlanLab'), cuerpo: cuerpoPlan(c, false) }; }, espera: { estado: 200 } },
+          { titulo: 'Plan inexistente', tipo: 'error', campos: camposPlan('x').filter(function (x) { return x.k !== 'codigo'; }),
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/plataforma/planes/NO_EXISTE', cuerpo: cuerpoPlan(c, false) }; }, espera: { estado: 404, codigo: 'SUS-404' } },
+          { titulo: 'Moneda inválida', tipo: 'validacion', campos: conCampo(camposPlan('x').filter(function (x) { return x.k !== 'codigo'; }), 'moneda', { k: 'moneda', etiqueta: 'Moneda', valor: 'dolares' }),
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/plataforma/planes/NO_EXISTE', cuerpo: cuerpoPlan(c, false) }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'moneda' } }
+        ]
+      },
+      {
+        id: 'plan-retirar', metodo: 'DELETE', ruta: '/plataforma/planes/{codigo}', titulo: 'Retirar un plan del catálogo', acceso: 'administrador de plataforma', necesita: soloAdmin,
+        sirve: 'Lo oculta del catálogo público (es_publico = false). Nunca borra: las tiendas suscritas lo conservan.',
+        casos: [
+          { titulo: 'Retirar el plan creado', tipo: 'ok', necesita: soloAdmin.concat(['codigoPlanLab']), peticion: function (c) { return { metodo: 'DELETE', ruta: '/plataforma/planes/' + c.e.obtener('codigoPlanLab') }; }, espera: { estado: 200 } },
+          { titulo: 'Plan inexistente', tipo: 'error', peticion: function () { return { metodo: 'DELETE', ruta: '/plataforma/planes/NO_EXISTE' }; }, espera: { estado: 404, codigo: 'SUS-404' } }
+        ]
+      },
+      {
+        id: 'suscripciones', metodo: 'GET', ruta: '/plataforma/suscripciones', titulo: 'Listar suscripciones', acceso: 'administrador de plataforma', necesita: soloAdmin,
+        sirve: 'Suscripciones de todas las tiendas, paginadas, con filtro opcional por estado.',
+        casos: [
+          { titulo: 'Primera página', tipo: 'ok', peticion: function () { return { metodo: 'GET', ruta: '/plataforma/suscripciones', query: { pagina: 0 } }; }, espera: { estado: 200 } },
+          { titulo: 'Filtrar por estado', tipo: 'ok', campos: [{ k: 'estado', etiqueta: 'Estado', tipo: 'select', opciones: ['PRUEBA', 'ACTIVA', 'VENCIDA', 'CANCELADA', 'SUSPENDIDA'] }],
+            peticion: function (c) { return { metodo: 'GET', ruta: '/plataforma/suscripciones', query: { estado: c.v.estado } }; }, espera: { estado: 200 } },
+          { titulo: 'Estado inválido', tipo: 'validacion', peticion: function () { return { metodo: 'GET', ruta: '/plataforma/suscripciones', query: { estado: 'XYZ' } }; }, espera: { estado: [400, 422], codigo: 'VAL-003' } }
+        ]
+      },
+      {
+        id: 'suspender', metodo: 'POST', ruta: '/plataforma/tiendas/{tiendaId}/suspender', titulo: 'Suspender una tienda', acceso: 'administrador de plataforma', necesita: soloAdmin,
+        sirve: 'Pone la suscripción en SUSPENDIDA: la tienda deja de operar (SUS-017) y la vitrina responde 404. Se puede revertir con «reactivar».',
+        notas: ['⚠️ Suspende la tienda real cuyo id indiques. El campo viene con la tienda activa del laboratorio (que podría ser la de otra cuenta si cambiaste de sesión).'],
+        casos: [
+          { titulo: 'Suspender', tipo: 'ok', manual: true, campos: [{ k: 'tienda', etiqueta: 'Id de la tienda', valor: function (e) { return e.obtener('tiendaId') || ''; } }, { k: 'motivo', etiqueta: 'Motivo (5-255)', valor: 'Prueba del laboratorio' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/plataforma/tiendas/' + c.v.tienda + '/suspender', cuerpo: { motivo: c.v.motivo } }; }, espera: { estado: [200, 409] } },
+          { titulo: 'Tienda sin suscripción', tipo: 'error', peticion: function () { return { metodo: 'POST', ruta: '/plataforma/tiendas/' + idInexistente + '/suspender', cuerpo: { motivo: 'Prueba del laboratorio' } }; }, espera: { estado: 404, codigo: 'SUS-404' } },
+          { titulo: 'Motivo muy corto', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/plataforma/tiendas/' + idInexistente + '/suspender', cuerpo: { motivo: 'no' } }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'motivo' } }
+        ]
+      },
+      {
+        id: 'reactivar', metodo: 'POST', ruta: '/plataforma/tiendas/{tiendaId}/reactivar', titulo: 'Reactivar una tienda suspendida', acceso: 'administrador de plataforma', necesita: soloAdmin,
+        sirve: 'Devuelve la suscripción al estado en que estaba antes de suspenderla.',
+        casos: [
+          { titulo: 'Reactivar', tipo: 'ok', manual: true, campos: [{ k: 'tienda', etiqueta: 'Id de la tienda', valor: function (e) { return e.obtener('tiendaId') || ''; } }, { k: 'motivo', etiqueta: 'Motivo (5-255)', valor: 'Prueba del laboratorio' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/plataforma/tiendas/' + c.v.tienda + '/reactivar', cuerpo: { motivo: c.v.motivo } }; }, espera: { estado: [200, 409] } },
+          { titulo: 'Tienda que no está suspendida', tipo: 'error', manual: true, necesita: soloAdmin.concat(['tiendaId']), descripcion: 'Si la tienda activa está operando responde 409 SUS-010.',
+            peticion: function (c) { return { metodo: 'POST', ruta: '/plataforma/tiendas/' + c.e.obtener('tiendaId') + '/reactivar', cuerpo: { motivo: 'Prueba del laboratorio' } }; }, espera: { estado: [200, 409] } },
+          { titulo: 'Tienda inexistente', tipo: 'error', peticion: function () { return { metodo: 'POST', ruta: '/plataforma/tiendas/' + idInexistente + '/reactivar', cuerpo: { motivo: 'Prueba del laboratorio' } }; }, espera: { estado: 404, codigo: 'SUS-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@ package shopify.api.core.modulos.usuario.entidad;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -40,6 +41,13 @@ public class DireccionUsuarioEntidad extends AuditoriaEntidad {
 
     @Column(name = "\"Pais\"", nullable = false, length = 100)
     private String pais;
+
+    /** Punto de entrega en el mapa; opcional en la libreta, obligatorio solo al comprar (ENV-007). */
+    @Column(name = "\"Latitud\"", precision = 9, scale = 6)
+    private BigDecimal latitud;
+
+    @Column(name = "\"Longitud\"", precision = 9, scale = 6)
+    private BigDecimal longitud;
 
     @Column(name = "\"EsPrincipal\"", nullable = false)
     private Boolean esPrincipal = false;

@@ -1,5 +1,6 @@
 package shopify.api.core.modulos.usuario.dto.response;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -13,6 +14,8 @@ public record DireccionResponse(
         String estadoProvincia,
         String codigoPostal,
         String pais,
+        BigDecimal latitud,
+        BigDecimal longitud,
         boolean esPrincipal,
         Instant fechaCreacion) {
 }

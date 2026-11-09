@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carrito · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  function raiz(c) { return '/vitrina/' + c.e.obtener('subdominio') + '/carrito'; }
+  function V(metodo, c, sufijo, extra) { var o = { metodo: metodo, ruta: raiz(c) + (sufijo || ''), sesion: false, carrito: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  var conCarrito = ['subdominio', 'carritoToken'];
+  var conVariante = ['subdominio', 'carritoToken', 'varianteId'];
+
+  Lab.pagina({
+    archivo: 'carrito.html',
+    titulo: 'Carrito (comprador)',
+    descripcion: 'El carrito público: no necesita cuenta. Su identidad es el **token** que devuelve al crearlo (cabecera `X-Carrito-Token`). Aquí se agregan productos, se aplica un cupón y se cotiza con envío.',
+    avisos: [
+      'Antes necesitas: una tienda operativa, **un producto publicado** (Catálogo) y, para cotizar con envío, **una tarifa** (Tarifas de envío). Los botones de abajo dejan todo listo.',
+      'El token del carrito se guarda en el estado (`carritoToken`). «Crear un carrito con 2 unidades» crea el carrito y agrega la variante.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearProducto, R.crearTarifa, R.crearCarrito],
+    endpoints: [
+      {
+        id: 'crear', metodo: 'POST', ruta: '/vitrina/{subdominio}/carrito', titulo: 'Crear el carrito', acceso: 'público', necesita: ['subdominio'],
+        sirve: 'Crea un carrito vacío y devuelve su `token`.',
+        notas: ['**Guarda el token**: sin él no se puede volver al carrito. Si se pierde, hay que crear otro.', 'La tienda debe estar operativa (si no, 404 `TIE-404`).'],
+        casos: [
+          { titulo: 'Crear carrito', tipo: 'ok', peticion: function (c) { return { metodo: 'POST', ruta: raiz(c), sesion: false }; }, espera: { estado: 201 }, despues: function (r, c) { c.e.poner('carritoToken', r.json.datos.token); } },
+          { titulo: 'Tienda inexistente', tipo: 'error', necesita: [], peticion: function () { return { metodo: 'POST', ruta: '/vitrina/no-existe-' + Lab.azar(6) + '/carrito', sesion: false }; }, espera: { estado: 404, codigo: 'TIE-404' } }
+        ]
+      },
+      {
+        id: 'agregar', metodo: 'POST', ruta: '/vitrina/{subdominio}/carrito/items', titulo: 'Agregar un producto', acceso: 'público + X-Carrito-Token', cabeceras: 'X-Carrito-Token', necesita: conVariante,
+        sirve: 'Suma la cantidad a la línea de esa variante (si ya existe). Cantidad de 1 a 99.',
+        notas: ['Si pides más que el stock, **no falla**: responde 200 con un aviso en `advertencias[]`; el checkout es quien bloquea.', 'El total por línea (y de líneas del carrito) tiene tope: pasarse da 422 `CAR-003`.'],
+        casos: [
+          { titulo: 'Agregar 1 unidad', tipo: 'ok', campos: [{ k: 'cantidad', etiqueta: 'Cantidad (1–99)', tipo: 'numero', valor: 1 }], peticion: function (c) { return V('POST', c, '/items', { cuerpo: { variante_id: c.e.obtener('varianteId'), cantidad: c.v.cantidad } }); }, espera: { estado: 200 } },
+          { titulo: 'Más unidades que el stock', tipo: 'ok', descripcion: 'No falla: devuelve una advertencia. Primero deja la línea en 1 unidad y luego suma 60 (el tope por línea es 99).', antes: function (c) { return c.pedir(V('PUT', c, '/items/' + c.e.obtener('varianteId'), { cuerpo: { cantidad: 1 } })); }, peticion: function (c) { return V('POST', c, '/items', { cuerpo: { variante_id: c.e.obtener('varianteId'), cantidad: 60 } }); }, espera: { estado: 200, verifica: function (r) { var a = r.json.datos.advertencias; return (a && a.length) ? '' : 'Se esperaba una advertencia de stock (¿la variante permite venta sin stock o tiene 99+?)'; } } },
+          { titulo: 'Cantidad 0', tipo: 'validacion', peticion: function (c) { return V('POST', c, '/items', { cuerpo: { variante_id: c.e.obtener('varianteId'), cantidad: 0 } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'cantidad' } },
+          { titulo: 'Cantidad mayor a 99', tipo: 'validacion', peticion: function (c) { return V('POST', c, '/items', { cuerpo: { variante_id: c.e.obtener('varianteId'), cantidad: 100 } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'cantidad' } },
+          { titulo: 'Variante que no existe', tipo: 'error', peticion: function (c) { return V('POST', c, '/items', { cuerpo: { variante_id: inexistente, cantidad: 1 } }); }, espera: { estado: 422, codigo: 'CAR-002' } },
+          { titulo: 'Sin X-Carrito-Token', tipo: 'seguridad', peticion: function (c) { return V('POST', c, '/items', { carrito: false, cuerpo: { variante_id: c.e.obtener('varianteId'), cantidad: 1 } }); }, espera: { estado: [400, 404], codigo: undefined } },
+          { titulo: 'Token de otro carrito', tipo: 'seguridad', peticion: function (c) { return V('POST', c, '/items', { carrito: inexistente, cuerpo: { variante_id: c.e.obtener('varianteId'), cantidad: 1 } }); }, espera: { estado: 404, codigo: 'CAR-404' } }
+        ]
+      },
+      {
+        id: 'ver', metodo: 'GET', ruta: '/vitrina/{subdominio}/carrito', titulo: 'Ver y cotizar el carrito', acceso: 'público + X-Carrito-Token', cabeceras: 'X-Carrito-Token', necesita: conCarrito,
+        sirve: 'Recalcula todo con los precios actuales. Con `tarifa_envio_id` suma el envío y `total_estimado` es **idéntico** al total que cobrará el checkout.',
+        notas: ['Copia ese `total_estimado` al `total_esperado` del checkout (misma tarifa y mismo cupón), o el checkout responde `CHK-004`.', 'Si ninguna línea requiere envío, la tarifa se ignora. Tarifa inactiva o de otra tienda: 409 `ENV-001`.'],
+        casos: [
+          { titulo: 'Ver el carrito (sin envío)', tipo: 'ok', peticion: function (c) { return V('GET', c); }, espera: { estado: 200 } },
+          { titulo: 'Cotizar con la tarifa del estado', tipo: 'ok', necesita: conCarrito.concat(['tarifaId']), peticion: function (c) { return V('GET', c, '', { query: { tarifa_envio_id: c.e.obtener('tarifaId') } }); }, espera: { estado: 200 } },
+          { titulo: 'Tarifa que no existe', tipo: 'error', peticion: function (c) { return V('GET', c, '', { query: { tarifa_envio_id: inexistente } }); }, espera: { estado: 409, codigo: 'ENV-001' } },
+          { titulo: 'Token de otro carrito', tipo: 'seguridad', peticion: function (c) { return V('GET', c, '', { carrito: inexistente }); }, espera: { estado: 404, codigo: 'CAR-404' } }
+        ]
+      },
+      {
+        id: 'cambiar', metodo: 'PUT', ruta: '/vitrina/{subdominio}/carrito/items/{varianteId}', titulo: 'Cambiar la cantidad de una línea', acceso: 'público + X-Carrito-Token', cabeceras: 'X-Carrito-Token', necesita: conVariante,
+        sirve: 'Fija la cantidad (0 a 99). Con **0 quita** la línea.',
+        casos: [
+          { titulo: 'Poner 3 unidades', tipo: 'ok', peticion: function (c) { return V('PUT', c, '/items/' + c.e.obtener('varianteId'), { cuerpo: { cantidad: 3 } }); }, espera: { estado: 200 } },
+          { titulo: 'Cantidad negativa', tipo: 'validacion', peticion: function (c) { return V('PUT', c, '/items/' + c.e.obtener('varianteId'), { cuerpo: { cantidad: -1 } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'cantidad' } },
+          { titulo: 'Línea que no está en el carrito', tipo: 'error', peticion: function (c) { return V('PUT', c, '/items/' + inexistente, { cuerpo: { cantidad: 2 } }); }, espera: { estado: [404, 422] } }
+        ]
+      },
+      {
+        id: 'quitar', metodo: 'DELETE', ruta: '/vitrina/{subdominio}/carrito/items/{varianteId}', titulo: 'Quitar una línea', acceso: 'público + X-Carrito-Token', cabeceras: 'X-Carrito-Token', necesita: conVariante,
+        casos: [
+          { titulo: 'Quitar la variante', tipo: 'ok', manual: true, descripcion: 'Después vuelve a agregarla (o usa «Crear un carrito con 2 unidades») para seguir con checkout.', peticion: function (c) { return V('DELETE', c, '/items/' + c.e.obtener('varianteId')); }, espera: { estado: 200 } },
+          { titulo: 'Línea que no existe', tipo: 'ok', descripcion: 'Quitar algo que no está es idempotente.', peticion: function (c) { return V('DELETE', c, '/items/' + inexistente); }, espera: { estado: [200, 404] } }
+        ]
+      },
+      {
+        id: 'cupon-aplicar', metodo: 'PUT', ruta: '/vitrina/{subdominio}/carrito/cupon', titulo: 'Aplicar un cupón', acceso: 'público + X-Carrito-Token', cabeceras: 'X-Carrito-Token', necesita: conCarrito,
+        sirve: 'Aplica un cupón (reemplaza el anterior) y recalcula el carrito.',
+        notas: ['Crea antes un cupón en la página **Cupones**; su código queda en el estado como `cuponCodigo`.', 'Si el cupón no aplica (no existe, vencido, sin usos, bajo el mínimo…), responde 422 `CUP-003` y el mensaje explica el motivo.'],
+        casos: [
+          { titulo: 'Aplicar el cupón del estado', tipo: 'ok', necesita: conCarrito.concat(['cuponCodigo']), campos: [{ k: 'codigo', etiqueta: 'Código', valor: function (e) { return e.obtener('cuponCodigo') || ''; } }], peticion: function (c) { return V('PUT', c, '/cupon', { cuerpo: { codigo: c.v.codigo } }); }, espera: { estado: [200, 422] } },
+          { titulo: 'Cupón que no existe', tipo: 'error', peticion: function (c) { return V('PUT', c, '/cupon', { cuerpo: { codigo: 'NOEXISTE' + Lab.azar(4).toUpperCase() } }); }, espera: { estado: 422, codigo: 'CUP-003' } },
+          { titulo: 'Sin código', tipo: 'validacion', peticion: function (c) { return V('PUT', c, '/cupon', { cuerpo: {} }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'codigo' } }
+        ]
+      },
+      {
+        id: 'cupon-quitar', metodo: 'DELETE', ruta: '/vitrina/{subdominio}/carrito/cupon', titulo: 'Quitar el cupón', acceso: 'público + X-Carrito-Token', cabeceras: 'X-Carrito-Token', necesita: conCarrito,
+        casos: [{ titulo: 'Quitar el cupón', tipo: 'ok', peticion: function (c) { return V('DELETE', c, '/cupon'); }, espera: { estado: 200 } }]
+      },
+      {
+        id: 'vincular', metodo: 'POST', ruta: '/vitrina/{subdominio}/carrito/vincular', titulo: 'Vincular el carrito a mi cuenta', acceso: 'sesión + X-Carrito-Token', cabeceras: 'Authorization, X-Carrito-Token', necesita: conCarrito.concat(['token']),
+        sirve: 'Asocia el carrito de invitado a tu usuario y lo **fusiona** con el que ya tengas.',
+        casos: [
+          { titulo: 'Vincular con mi sesión', tipo: 'ok', peticion: function (c) { return V('POST', c, '/vincular', { sesion: true }); }, espera: { estado: 200 }, despues: function (r, c) { if (r.json.datos && r.json.datos.token) { c.e.poner('carritoToken', r.json.datos.token); } } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', necesita: conCarrito, peticion: function (c) { return V('POST', c, '/vincular'); }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

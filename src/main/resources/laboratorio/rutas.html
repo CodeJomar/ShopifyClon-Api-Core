@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rutas de reparto · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+  var base = ['token', 'tiendaId'];
+  var conRuta = base.concat(['rutaId']);
+  var haceFaltaCompra = base.concat(['subdominio', 'varianteId', 'tarifaId']);
+  function P(metodo, ruta, extra) { var o = { metodo: metodo, ruta: ruta, tienda: true }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  function RT(c, s) { return '/panel/rutas/' + c.e.obtener('rutaId') + (s || ''); }
+  function envioNuevo(c) {
+    return R.crearCarrito.ejecutar(c).then(function () { return R.hacerCheckout.ejecutar(c); })
+      .then(function () { return R.pagarOrden.ejecutar(c); }).then(function () { return R.crearEnvio.ejecutar(c); });
+  }
+  // Envío nuevo + ruta en BORRADOR con ese envío.
+  function rutaNueva(c) {
+    return envioNuevo(c).then(function () {
+      return c.pedir(P('POST', '/panel/rutas', { cuerpo: { fecha: Lab.fecha(0), chofer: 'Chofer Lab', placa: 'LAB-123', envio_ids: [c.e.obtener('envioId')] } }));
+    }).then(function (r) { c.e.poner('rutaId', c.exigir(r, 201, 'Crear ruta').id); });
+  }
+  var camposRuta = [
+    { k: 'fecha', etiqueta: 'Fecha (AAAA-MM-DD, hoy o futura)', valor: function () { return Lab.fecha(0); } },
+    { k: 'chofer', etiqueta: 'Chofer', valor: 'Chofer Lab' },
+    { k: 'placa', etiqueta: 'Placa', valor: 'LAB-123' },
+    { k: 'nota', etiqueta: 'Nota', valor: 'Ruta de laboratorio' }
+  ];
+  function cuerpoRuta(c, envios) { return { fecha: c.v.fecha, chofer: c.v.chofer, placa: c.v.placa, nota: c.v.nota, envio_ids: envios }; }
+
+  Lab.pagina({
+    archivo: 'rutas.html',
+    titulo: 'Rutas de reparto y guía de remisión',
+    descripcion: 'Agrupa envíos en una hoja de ruta con chofer y placa; el **orden de los envíos** es el orden de las paradas. El detalle sirve para imprimir la guía de remisión.',
+    avisos: [
+      'Estados de la ruta: `BORRADOR → EN_CURSO → FINALIZADA`. Solo en `BORRADOR` se edita. **Iniciar** despacha los envíos `CREADO`; **finalizar** libera los pendientes.',
+      'Un envío no puede estar en dos rutas activas (`RUT-002`). Cada caso que necesita ruta arma un envío nuevo (carrito → orden → pago → envío), así que requiere producto, tarifa y tienda operativa en el estado.',
+      'El código de la ruta es correlativo por tienda (`RT-0001`).'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearTarifa, R.crearProducto, R.ordenCompleta],
+    endpoints: [
+      {
+        id: 'disponibles', metodo: 'GET', ruta: '/panel/envios/disponibles-para-ruta', titulo: 'Envíos disponibles para una ruta', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Envíos `CREADO` o `EN_TRANSITO` que no están en una ruta activa.',
+        casos: [{ titulo: 'Listar', tipo: 'ok', peticion: function () { return P('GET', '/panel/envios/disponibles-para-ruta'); }, espera: { estado: 200 } }]
+      },
+      {
+        id: 'crear', metodo: 'POST', ruta: '/panel/rutas', titulo: 'Crear una ruta', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Crea la ruta en `BORRADOR` con sus paradas, en el orden del arreglo `envio_ids`.',
+        notas: ['La fecha no puede ser pasada (según la zona horaria de la tienda).', 'Un envío no puede repetirse en la misma ruta.', 'Solo se agregan envíos `CREADO` o `EN_TRANSITO` (`RUT-001`).'],
+        casos: [
+          { titulo: 'Crear con un envío nuevo', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma un envío nuevo y lo pone en la ruta.', antes: envioNuevo, campos: camposRuta,
+            peticion: function (c) { return P('POST', '/panel/rutas', { cuerpo: cuerpoRuta(c, [c.e.obtener('envioId')]) }); }, espera: { estado: 201 }, despues: function (r, c) { c.e.poner('rutaId', r.json.datos.id); } },
+          { titulo: 'Envío que ya está en otra ruta', tipo: 'error', necesita: conRuta.concat(['envioId']), campos: camposRuta,
+            peticion: function (c) { return P('POST', '/panel/rutas', { cuerpo: cuerpoRuta(c, [c.e.obtener('envioId')]) }); }, espera: { estado: 409, codigo: 'RUT-002' } },
+          { titulo: 'Fecha en el pasado', tipo: 'error', necesita: base.concat(['envioId']), campos: camposRuta, peticion: function (c) { return P('POST', '/panel/rutas', { cuerpo: { fecha: '2020-01-01', chofer: 'X', placa: 'X-1', envio_ids: [c.e.obtener('envioId')] } }); }, espera: { estado: 422, codigo: 'VAL-001' } },
+          { titulo: 'Envío que no existe', tipo: 'error', campos: camposRuta, peticion: function (c) { return P('POST', '/panel/rutas', { cuerpo: cuerpoRuta(c, [inexistente]) }); }, espera: { estado: 404, codigo: 'ENV-404' } },
+          { titulo: 'Envíos repetidos', tipo: 'validacion', campos: camposRuta, peticion: function (c) { return P('POST', '/panel/rutas', { cuerpo: cuerpoRuta(c, [inexistente, inexistente]) }); }, espera: { estado: 422, codigo: 'VAL-001' } },
+          { titulo: 'Sin envíos', tipo: 'validacion', campos: camposRuta, peticion: function (c) { return P('POST', '/panel/rutas', { cuerpo: cuerpoRuta(c, []) }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'envio_ids' } },
+          { titulo: 'Sin chofer ni placa', tipo: 'validacion', peticion: function () { return P('POST', '/panel/rutas', { cuerpo: { fecha: Lab.fecha(0), envio_ids: [inexistente] } }); }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'chofer' } }
+        ]
+      },
+      {
+        id: 'listar', metodo: 'GET', ruta: '/panel/rutas', titulo: 'Listar las rutas', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: base,
+        sirve: 'Paginado, con `total_paradas` y `paradas_entregadas`. Filtros `estado` y `fecha`.',
+        casos: [
+          { titulo: 'Todas', tipo: 'ok', peticion: function () { return P('GET', '/panel/rutas', { query: { pagina: 0 } }); }, espera: { estado: 200 } },
+          { titulo: 'En borrador', tipo: 'ok', peticion: function () { return P('GET', '/panel/rutas', { query: { estado: 'BORRADOR' } }); }, espera: { estado: 200 } },
+          { titulo: 'Estado inválido', tipo: 'validacion', peticion: function () { return P('GET', '/panel/rutas', { query: { estado: 'XYZ' } }); }, espera: { estado: [400, 422] } }
+        ]
+      },
+      {
+        id: 'ver', metodo: 'GET', ruta: '/panel/rutas/{id}', titulo: 'Detalle / guía de remisión', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conRuta,
+        sirve: 'Remitente y, por cada parada: destinatario, teléfono, dirección, coordenadas e ítems.',
+        casos: [
+          { titulo: 'Ver la ruta', tipo: 'ok', peticion: function (c) { return P('GET', RT(c)); }, espera: { estado: 200 } },
+          { titulo: 'Ruta inexistente', tipo: 'error', peticion: function () { return P('GET', '/panel/rutas/' + inexistente); }, espera: { estado: 404, codigo: 'RUT-404' } }
+        ]
+      },
+      {
+        id: 'editar', metodo: 'PUT', ruta: '/panel/rutas/{id}', titulo: 'Editar una ruta', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conRuta,
+        sirve: 'Cambia datos y paradas. **Solo en `BORRADOR`** (`RUT-005`).',
+        casos: [
+          { titulo: 'Cambiar chofer y placa', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma una ruta nueva en borrador y la edita.', antes: rutaNueva, campos: camposRuta,
+            peticion: function (c) { return P('PUT', RT(c), { cuerpo: cuerpoRuta(c, [c.e.obtener('envioId')]) }); }, espera: { estado: 200 } },
+          { titulo: 'Editar una ruta iniciada', tipo: 'error', necesita: haceFaltaCompra, descripcion: 'Arma una ruta, la inicia y trata de editarla.', antes: function (c) { return rutaNueva(c).then(function () { return c.pedir(P('POST', RT(c, '/iniciar'))); }).then(function (r) { c.exigir(r, 200, 'Iniciar'); }); },
+            campos: camposRuta, peticion: function (c) { return P('PUT', RT(c), { cuerpo: cuerpoRuta(c, [c.e.obtener('envioId')]) }); }, espera: { estado: [409, 422], codigo: 'RUT-005' } },
+          { titulo: 'Ruta inexistente', tipo: 'error', campos: camposRuta, peticion: function (c) { return P('PUT', '/panel/rutas/' + inexistente, { cuerpo: cuerpoRuta(c, [inexistente]) }); }, espera: { estado: 404, codigo: 'RUT-404' } }
+        ]
+      },
+      {
+        id: 'iniciar', metodo: 'POST', ruta: '/panel/rutas/{id}/iniciar', titulo: 'Iniciar la ruta', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conRuta,
+        sirve: '`BORRADOR → EN_CURSO` y **despacha** los envíos que estaban `CREADO`.',
+        casos: [
+          { titulo: 'Iniciar una ruta nueva', tipo: 'ok', necesita: haceFaltaCompra, antes: rutaNueva, peticion: function (c) { return P('POST', RT(c, '/iniciar')); }, espera: { estado: 200 } },
+          { titulo: 'Iniciar una ya iniciada', tipo: 'error', peticion: function (c) { return P('POST', RT(c, '/iniciar')); }, espera: { estado: [409, 422], codigo: 'RUT-003' } },
+          { titulo: 'Ruta inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/rutas/' + inexistente + '/iniciar'); }, espera: { estado: 404, codigo: 'RUT-404' } }
+        ]
+      },
+      {
+        id: 'finalizar', metodo: 'POST', ruta: '/panel/rutas/{id}/finalizar', titulo: 'Finalizar la ruta', acceso: 'permiso ORDENES_GESTIONAR', cabeceras: 'X-Tienda-Id', necesita: conRuta,
+        sirve: '`EN_CURSO → FINALIZADA`. Se puede con paradas pendientes: esos envíos vuelven a quedar disponibles.',
+        casos: [
+          { titulo: 'Finalizar una ruta en curso', tipo: 'ok', necesita: haceFaltaCompra, descripcion: 'Arma una ruta, la inicia y la finaliza.', antes: function (c) { return rutaNueva(c).then(function () { return c.pedir(P('POST', RT(c, '/iniciar'))); }).then(function (r) { c.exigir(r, 200, 'Iniciar'); }); },
+            peticion: function (c) { return P('POST', RT(c, '/finalizar')); }, espera: { estado: 200 } },
+          { titulo: 'Finalizar una ya finalizada', tipo: 'error', peticion: function (c) { return P('POST', RT(c, '/finalizar')); }, espera: { estado: [409, 422], codigo: 'RUT-004' } },
+          { titulo: 'Ruta inexistente', tipo: 'error', peticion: function () { return P('POST', '/panel/rutas/' + inexistente + '/finalizar'); }, espera: { estado: 404, codigo: 'RUT-404' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>
