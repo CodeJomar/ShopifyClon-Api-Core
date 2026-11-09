@@ -200,6 +200,21 @@ class PagoEnLineaTest extends PruebaIntegracionBase {
     }
 
     @Test
+    void unCobroExitosoDespuesDeUnFalloDelMismoIntentoConfirmaLaOrden() throws Exception {
+        JsonNode orden = ordenStripe();
+        String intento = iniciarYObtenerIntento(orden);
+        String fallo = evento("payment_intent.payment_failed", intento, 10000);
+        webhook(fallo, firmar(fallo)).andExpect(status().isOk());
+
+        String exito = evento("payment_intent.succeeded", intento, 10000);
+        webhook(exito, firmar(exito)).andExpect(status().isOk());
+
+        assertThat(jdbc.queryForObject("SELECT \"Estado\" FROM \"Pagos\" WHERE \"OrdenId\" = ?", String.class,
+                UUID.fromString(orden.get("id").asText()))).isEqualTo("APROBADO");
+        assertThat(estadoPago(orden.get("id").asText())).isEqualTo("PAGADO");
+    }
+
+    @Test
     void unEventoQueNoEsDeCobroSeIgnoraConRespuesta200() throws Exception {
         String cuerpo = evento("charge.refunded", null, 0);
 

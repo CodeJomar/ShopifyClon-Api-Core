@@ -65,7 +65,9 @@ public class WebhookStripeServicio {
 
     private void confirmarEnTransaccion(UUID pagoId, UUID tiendaId, EventoPasarela evento) {
         PagoEntidad pago = pagos.bloquearPorId(pagoId).orElse(null);
-        if (pago == null || pago.getEstado() != EstadoRegistroPago.PENDIENTE) {
+        // Un fallo no cierra el intento de Stripe: el comprador puede reintentar con otra tarjeta y el cobro llegar después.
+        // Por eso un pago RECHAZADO por fallo todavía se confirma si el mismo intento termina cobrándose.
+        if (pago == null || (pago.getEstado() != EstadoRegistroPago.PENDIENTE && pago.getEstado() != EstadoRegistroPago.RECHAZADO)) {
             // Repetido (ya APROBADO) o ya resuelto: no hay efectos
             return;
         }
