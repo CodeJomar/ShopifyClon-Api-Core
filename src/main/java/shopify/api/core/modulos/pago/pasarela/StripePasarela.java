@@ -43,9 +43,8 @@ public class StripePasarela implements PasarelaEnLinea {
                     .setCurrency(moneda.toLowerCase(Locale.ROOT))
                     .putMetadata("orden_id", ordenId.toString())
                     .putMetadata("tienda_id", tiendaId.toString())
-                    .setAutomaticPaymentMethods(PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
-                            .setEnabled(true)
-                            .build())
+                    // Solo tarjeta: evita que el formulario ofrezca Link u otros métodos.
+                    .addPaymentMethodType("card")
                     .build(), opciones());
             return new IntentoPago(intento.getId(), intento.getClientSecret(), intento.getStatus());
         } catch (StripeException ex) {
@@ -93,7 +92,15 @@ public class StripePasarela implements PasarelaEnLinea {
         } catch (SignatureVerificationException ex) {
             throw new AccesoDenegadoException("PAG-003", "Firma de webhook inválida");
         }
+        // Si la versión de API del destino del webhook es distinta a la del SDK, getObject() viene vacío: se lee igual.
         Optional<StripeObject> objeto = evento.getDataObjectDeserializer().getObject();
+        if (objeto.isEmpty()) {
+            try {
+                objeto = Optional.ofNullable(evento.getDataObjectDeserializer().deserializeUnsafe());
+            } catch (com.stripe.exception.EventDataObjectDeserializationException ex) {
+                objeto = Optional.empty();
+            }
+        }
         if (objeto.isPresent() && objeto.get() instanceof PaymentIntent intento) {
             return new EventoPasarela(evento.getType(), intento.getId(), intento.getAmount());
         }
