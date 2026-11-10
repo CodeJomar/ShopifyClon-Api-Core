@@ -81,7 +81,7 @@ EXPOSE 8080
 # Configuraciones adicionales de JVM (heap, GC, etc.) deben inyectarse
 # externamente via JAVA_TOOL_OPTIONS desde la infraestructura.
 # Ejemplo: docker run -e JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0" ...
-ENV JAVA_OPTS="-XX:+ExitOnOutOfMemoryError"
+ENV JAVA_OPTS="-XX:+ExitOnOutOfMemoryError -XX:MaxRAMPercentage=75"
 
 # Exec form para recibir señales POSIX correctamente (SIGTERM → graceful shutdown)
 ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]
