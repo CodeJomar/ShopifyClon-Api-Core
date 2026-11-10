@@ -39,13 +39,13 @@ COPY pom.xml .
 RUN chmod +x mvnw
 
 # 2. Descargar dependencias offline (capa cacheada si pom.xml no cambia)
-RUN --mount=type=cache,target=/root/.m2 \
+RUN --mount=type=cache,id=s/679a6747-180c-468f-83f5-491f8db2e162-m2,target=/root/.m2 \
     ./mvnw dependency:resolve dependency:resolve-plugins -B -q
 
 # 3. Copiar código fuente y compilar
 COPY src ./src
 
-RUN --mount=type=cache,target=/root/.m2 \
+RUN --mount=type=cache,id=s/679a6747-180c-468f-83f5-491f8db2e162-m2,target=/root/.m2 \
     ./mvnw clean package -DskipTests -B -q \
     && cp target/shopify-0.0.1-SNAPSHOT.jar /workspace/app.jar
 
