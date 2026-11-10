@@ -2,6 +2,7 @@ package shopify.api.core.modulos.notificacion.correo;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "app.correo.proveedor", havingValue = "smtp", matchIfMissing = true)
 public class SmtpEnviadorCorreo implements EnviadorCorreo {
 
     private final JavaMailSender correo;

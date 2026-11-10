@@ -42,7 +42,14 @@ public class NotificacionesUsuarioEscuchador {
         try {
             envio.run();
         } catch (RuntimeException ex) {
-            log.warn("No se pudo enviar el correo de {}: {}", tipo, ex.getClass().getSimpleName());
+            Throwable causa = ex;
+            while (causa.getCause() != null && causa.getCause() != causa) {
+                causa = causa.getCause();
+            }
+            // Causa raíz con las direcciones de correo tachadas: permite diagnosticar sin exponer datos personales.
+            String detalle = String.valueOf(causa.getMessage()).replaceAll("\\S+@\\S+", "***");
+            log.warn("No se pudo enviar el correo de {}: {} / {}: {}", tipo, ex.getClass().getSimpleName(),
+                    causa.getClass().getSimpleName(), detalle.length() > 200 ? detalle.substring(0, 200) : detalle);
         }
     }
 }
