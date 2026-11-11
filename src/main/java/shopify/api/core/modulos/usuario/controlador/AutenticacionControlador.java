@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.comun.seguridad.LimitarPeticiones;
 import shopify.api.core.modulos.usuario.dto.request.ActivarCuentaRequest;
+import shopify.api.core.modulos.usuario.dto.request.CodigoCorreoRequest;
 import shopify.api.core.modulos.usuario.dto.request.CorreoRequest;
 import shopify.api.core.modulos.usuario.dto.request.LoginRequest;
 import shopify.api.core.modulos.usuario.dto.request.RegistroRequest;
@@ -58,7 +59,24 @@ public class AutenticacionControlador {
     @PostMapping("/login")
     @LimitarPeticiones(porMinuto = 10)
     public ResponseEntity<RespuestaApi<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
-        return RespuestaApi.ok(autenticacionServicio.login(request), "Sesión iniciada");
+        LoginResponse respuesta = autenticacionServicio.login(request);
+        return RespuestaApi.ok(respuesta, respuesta.requiereSegundoFactor()
+                ? "Te enviamos un código a tu correo para terminar de iniciar sesión" : "Sesión iniciada");
+    }
+
+    @Operation(summary = "Segundo paso del login: canjear el código enviado por correo (verificación en dos pasos)")
+    @PostMapping("/login/verificar")
+    @LimitarPeticiones(porMinuto = 10)
+    public ResponseEntity<RespuestaApi<LoginResponse>> verificarSegundoFactor(@Valid @RequestBody CodigoCorreoRequest request) {
+        return RespuestaApi.ok(autenticacionServicio.verificarSegundoFactor(request), "Sesión iniciada");
+    }
+
+    @Operation(summary = "Desbloquear la cuenta con el código recibido tras varios intentos fallidos")
+    @PostMapping("/desbloquear")
+    @LimitarPeticiones(porMinuto = 10)
+    public ResponseEntity<RespuestaApi<Void>> desbloquear(@Valid @RequestBody CodigoCorreoRequest request) {
+        autenticacionServicio.desbloquear(request);
+        return RespuestaApi.ok(null, "Tu cuenta quedó desbloqueada");
     }
 
     @Operation(summary = "Solicitar un código para recuperar la clave")

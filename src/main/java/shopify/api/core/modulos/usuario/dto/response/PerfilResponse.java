@@ -10,5 +10,6 @@ public record PerfilResponse(
         String apellidos,
         String telefono,
         boolean esAdministradorPlataforma,
+        boolean dosPasosActivo,
         Instant fechaCreacion) {
 }

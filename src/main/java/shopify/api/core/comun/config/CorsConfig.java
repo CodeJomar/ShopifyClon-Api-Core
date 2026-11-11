@@ -7,17 +7,26 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class CorsConfig {
+
+    private final List<String> origenesPermitidos;
+
+    public CorsConfig(@Value("${app.cors.origenes-permitidos:http://localhost:3000}") String origenes) {
+        this.origenesPermitidos = Arrays.stream(origenes.split(","))
+                .map(String::strip).filter(o -> !o.isEmpty()).toList();
+    }
 
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        config.setAllowedOriginPatterns(Collections.singletonList("*")); // Ajustable a localhost:3000 o dominios específicos
-        config.setAllowedHeaders(Arrays.asList("Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With", "X-Tienda-Id"));
+        // A-007: solo los orígenes configurados (CORS_ORIGENES_PERMITIDOS, separados por coma); nunca "*" con credenciales
+        config.setAllowedOrigins(origenesPermitidos);
+        config.setAllowedHeaders(Arrays.asList("Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With", "X-Tienda-Id", "X-Carrito-Token", "Idempotency-Key"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

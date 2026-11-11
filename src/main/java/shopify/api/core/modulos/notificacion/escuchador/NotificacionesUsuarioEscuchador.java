@@ -10,6 +10,8 @@ import shopify.api.core.modulos.notificacion.correo.EnviadorCorreo;
 import shopify.api.core.modulos.notificacion.plantilla.Plantillas;
 import shopify.api.core.modulos.usuario.evento.CodigoActivacionEmitidoEvento;
 import shopify.api.core.modulos.usuario.evento.CodigoRecuperacionEmitidoEvento;
+import shopify.api.core.modulos.usuario.evento.CodigoSegundoFactorEmitidoEvento;
+import shopify.api.core.modulos.usuario.evento.CuentaBloqueadaEvento;
 
 /** Correos de usuario: código de activación (24 h) y código de recuperación (30 min). */
 @Slf4j
@@ -33,6 +35,24 @@ public class NotificacionesUsuarioEscuchador {
     public void alEmitirCodigoRecuperacion(CodigoRecuperacionEmitidoEvento evento) {
         enviarSeguro("recuperación", () -> {
             var mensaje = Plantillas.recuperacion(evento.nombres(), evento.codigo());
+            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto());
+        });
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void alBloquearCuenta(CuentaBloqueadaEvento evento) {
+        enviarSeguro("cuenta bloqueada", () -> {
+            var mensaje = Plantillas.cuentaBloqueada(evento.nombres(), evento.codigo(), evento.minutosBloqueo());
+            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto());
+        });
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void alEmitirCodigoSegundoFactor(CodigoSegundoFactorEmitidoEvento evento) {
+        enviarSeguro("segundo factor", () -> {
+            var mensaje = Plantillas.segundoFactor(evento.nombres(), evento.codigo());
             correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto());
         });
     }

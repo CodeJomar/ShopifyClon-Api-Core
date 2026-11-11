@@ -6,7 +6,11 @@ import java.time.Duration;
 public enum TipoCodigoSeguridad {
 
     ACTIVACION_CUENTA(Duration.ofHours(24)),
-    RECUPERACION_CLAVE(Duration.ofMinutes(30));
+    RECUPERACION_CLAVE(Duration.ofMinutes(30)),
+    /** A-007: desbloquea una cuenta bloqueada por intentos fallidos de login. */
+    DESBLOQUEO_CUENTA(Duration.ofMinutes(30)),
+    /** A-007: segundo paso del login cuando el usuario activó la verificación en dos pasos. */
+    SEGUNDO_FACTOR(Duration.ofMinutes(10));
 
     private final Duration duracion;
 

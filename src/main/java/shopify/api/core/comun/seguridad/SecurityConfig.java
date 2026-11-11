@@ -36,6 +36,12 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
 
+                // A-007: HSTS también detrás del proxy TLS de la plataforma (Spring ya añade nosniff y X-Frame-Options)
+                .headers(headers -> headers
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000)))
+
                 // Manejo de errores 401 personalizados
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(this.jwtPuntoEntradaAutenticacion)
@@ -62,9 +68,6 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
-
-                        // TEMPORAL: se elimina al reescribir pago (T-016)
-                        .requestMatchers("/pagos/webhook/**").permitAll()
 
                         // Cualquier otra petición requiere autenticación por token JWT
                         .anyRequest().authenticated()

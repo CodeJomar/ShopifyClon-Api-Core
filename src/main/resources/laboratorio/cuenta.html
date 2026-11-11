@@ -118,12 +118,13 @@
             espera: { estado: 200 },
             despues: function (r, c) {
               var d = r.json.datos;
+              if (d.requiere_segundo_factor) { c.e.poner('correo', c.v.correo); return; }
               c.e.poner('token', d.token); c.e.poner('usuarioId', d.usuario.id); c.e.poner('correo', d.usuario.correo_electronico); c.e.poner('nombres', d.usuario.nombres);
               c.e.poner('esAdminPlataforma', d.usuario.es_administrador_plataforma ? 'sí' : '');
               c.e.ponerSoloMemoria('contrasena', c.v.contrasena);
               if (d.tiendas && d.tiendas.length && !c.e.obtener('tiendaId')) { c.e.poner('tiendaId', d.tiendas[0].tienda_id); c.e.poner('subdominio', d.tiendas[0].subdominio); c.e.poner('rolTienda', d.tiendas[0].rol); }
             } },
-          { titulo: 'Contraseña incorrecta', tipo: 'error', campos: [campoCorreo(correoEstado)],
+          { titulo: 'Contraseña incorrecta', tipo: 'error', manual: true, descripcion: 'Cuenta como intento fallido de esa cuenta: al quinto seguido se bloquea 15 minutos (USR-014). Un login correcto reinicia el contador.', campos: [campoCorreo(correoEstado)],
             peticion: function (c) { return { metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: c.v.correo || 'x@laboratorio.test', contrasena: 'Incorrecta' + Lab.azar(4) + '1' } }; },
             espera: { estado: 401, codigo: 'USR-004' } },
           { titulo: 'Correo que no existe', tipo: 'seguridad', descripcion: 'Mismo error y mismo mensaje que la contraseña incorrecta.',
@@ -208,6 +209,7 @@
       {
         id: 'contrasena', metodo: 'PUT', ruta: '/cuenta/contrasena', titulo: 'Cambiar mi contraseña', acceso: 'sesión', necesita: ['token'],
         sirve: 'Exige la contraseña actual; la nueva debe ser distinta.',
+        notas: ['Al cambiarla se **cierran todas las sesiones** (también la actual): hay que volver a iniciar sesión.', 'Se rechazan las contraseñas demasiado comunes o que contienen tu correo (`USR-015`).'],
         casos: [
           { titulo: 'Contraseña actual incorrecta', tipo: 'error', peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/contrasena', cuerpo: { contrasena_actual: 'Equivocada9', contrasena_nueva: 'OtraClave2026' } }; },
             espera: { estado: 422, codigo: 'USR-010' } },
@@ -217,10 +219,76 @@
             espera: { estado: 422, codigo: 'USR-010' } },
           { titulo: 'Nueva contraseña débil', tipo: 'validacion', peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/contrasena', cuerpo: { contrasena_actual: 'Equivocada9', contrasena_nueva: '1234567' } }; },
             espera: { estado: 422, codigo: 'VAL-001', validacion: 'contrasena_nueva' } },
-          { titulo: 'Cambiar la contraseña de verdad', tipo: 'ok', manual: true, descripcion: 'Cambia la contraseña de la cuenta con la que iniciaste sesión.',
+          { titulo: 'Cambiar la contraseña de verdad', tipo: 'ok', manual: true, descripcion: 'Cambia la contraseña de la cuenta con la que iniciaste sesión. Cierra la sesión: después vuelve a hacer login.',
             campos: [{ k: 'actual', etiqueta: 'Actual', tipo: 'password', valor: function (e) { return e.recuperarMemoria('contrasena'); } }, { k: 'nueva', etiqueta: 'Nueva', valor: 'NuevaClave2026' }],
             peticion: function (c) { return { metodo: 'PUT', ruta: '/cuenta/contrasena', cuerpo: { contrasena_actual: c.v.actual, contrasena_nueva: c.v.nueva } }; },
-            espera: { estado: 200 }, despues: function (r, c) { c.e.ponerSoloMemoria('contrasena', c.v.nueva); } }
+            espera: { estado: 200 }, despues: function (r, c) { c.e.ponerSoloMemoria('contrasena', c.v.nueva); c.e.poner('token', ''); } }
+        ]
+      },
+      {
+        id: 'login-verificar', metodo: 'POST', ruta: '/auth/login/verificar', titulo: 'Login en dos pasos: canjear el código', acceso: 'público',
+        sirve: 'Segundo paso del login cuando la cuenta tiene activa la verificación en dos pasos: con el código que llegó por correo entrega el token.',
+        notas: ['Solo aplica si activaste «Verificación en dos pasos» (más abajo). Entonces `POST /auth/login` responde `requiere_segundo_factor: true` **sin token** y envía un código de 6 dígitos (vence en 10 minutos, 5 intentos).', 'El código solo se emite después de una contraseña correcta: sin ese paso no hay nada que canjear (`USR-012`).'],
+        casos: [
+          { titulo: 'Canjear el código del correo', tipo: 'ok', manual: true, descripcion: 'Activa dos pasos, haz «Login correcto» y pega aquí el código que llegó.',
+            campos: [campoCorreo(correoEstado), { k: 'codigo', etiqueta: 'Código de 6 dígitos', valor: '' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/login/verificar', sesion: false, cuerpo: { correo_electronico: c.v.correo, codigo: c.v.codigo } }; },
+            espera: { estado: 200 },
+            despues: function (r, c) { var d = r.json.datos; c.e.poner('token', d.token); c.e.poner('usuarioId', d.usuario.id); c.e.poner('correo', d.usuario.correo_electronico); } },
+          { titulo: 'Código sin haber pasado por la contraseña', tipo: 'error', peticion: function () { return { metodo: 'POST', ruta: '/auth/login/verificar', sesion: false, cuerpo: { correo_electronico: 'nadie-' + Lab.azar(6) + '@laboratorio.test', codigo: '123456' } }; },
+            espera: { estado: 422, codigo: 'USR-012' } },
+          { titulo: 'Código con formato inválido', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/auth/login/verificar', sesion: false, cuerpo: { correo_electronico: 'a@laboratorio.test', codigo: '12' } }; },
+            espera: { estado: 422, codigo: 'VAL-001', validacion: 'codigo' } }
+        ]
+      },
+      {
+        id: 'desbloquear', metodo: 'POST', ruta: '/auth/desbloquear', titulo: 'Desbloquear la cuenta', acceso: 'público',
+        sirve: 'Levanta el bloqueo por intentos fallidos con el código que llegó por correo, sin esperar los 15 minutos.',
+        notas: ['Tras **5 contraseñas incorrectas seguidas** la cuenta se bloquea 15 minutos: el login responde 409 `USR-014` aunque la contraseña sea correcta, y el dueño recibe un correo con un código de desbloqueo (vence en 30 minutos).', 'El bloqueo es **de esa cuenta**, no del sistema ni de la IP. Un login correcto antes del quinto fallo reinicia el contador.', 'Restablecer la contraseña también levanta el bloqueo.'],
+        casos: [
+          { titulo: 'Provocar el bloqueo (5 fallos)', tipo: 'error', manual: true, descripcion: 'Envía 5 contraseñas incorrectas a la cuenta del campo. La quinta responde USR-014 y llega el correo.',
+            campos: [campoCorreo(correoEstado)],
+            antes: function (c) {
+              var paso = Promise.resolve();
+              for (var i = 0; i < 4; i++) { paso = paso.then(function () { return c.pedir({ metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: c.v.correo, contrasena: 'Incorrecta' + Lab.azar(4) + '1' } }); }); }
+              return paso;
+            },
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/login', sesion: false, cuerpo: { correo_electronico: c.v.correo, contrasena: 'Incorrecta' + Lab.azar(4) + '1' } }; },
+            espera: { estado: [401, 409] } },
+          { titulo: 'Desbloquear con el código del correo', tipo: 'ok', manual: true, campos: [campoCorreo(correoEstado), { k: 'codigo', etiqueta: 'Código de 6 dígitos', valor: '' }],
+            peticion: function (c) { return { metodo: 'POST', ruta: '/auth/desbloquear', sesion: false, cuerpo: { correo_electronico: c.v.correo, codigo: c.v.codigo } }; }, espera: { estado: 200 } },
+          { titulo: 'Código que no existe', tipo: 'error', peticion: function () { return { metodo: 'POST', ruta: '/auth/desbloquear', sesion: false, cuerpo: { correo_electronico: 'nadie-' + Lab.azar(6) + '@laboratorio.test', codigo: '123456' } }; },
+            espera: { estado: 422, codigo: 'USR-012' } }
+        ]
+      },
+      {
+        id: 'dos-pasos', metodo: 'PUT', ruta: '/cuenta/dos-pasos', titulo: 'Verificación en dos pasos', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Activa o desactiva el segundo factor: con él activo, cada login pide además un código enviado al correo.',
+        notas: ['Exige la contraseña actual (`USR-010` si no coincide).', 'El perfil (`GET /cuenta/perfil`) muestra el estado en `dos_pasos_activo`.', 'Es opcional por usuario: las cuentas que no lo activan entran como siempre.'],
+        casos: [
+          { titulo: 'Activar', tipo: 'ok', manual: true, campos: [{ k: 'actual', etiqueta: 'Contraseña actual', tipo: 'password', valor: function (e) { return e.recuperarMemoria('contrasena'); } }],
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/cuenta/dos-pasos', cuerpo: { activo: true, contrasena_actual: c.v.actual } }; }, espera: { estado: 200 } },
+          { titulo: 'Desactivar', tipo: 'ok', manual: true, campos: [{ k: 'actual', etiqueta: 'Contraseña actual', tipo: 'password', valor: function (e) { return e.recuperarMemoria('contrasena'); } }],
+            peticion: function (c) { return { metodo: 'PUT', ruta: '/cuenta/dos-pasos', cuerpo: { activo: false, contrasena_actual: c.v.actual } }; }, espera: { estado: 200 } },
+          { titulo: 'Contraseña actual incorrecta', tipo: 'error', peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/dos-pasos', cuerpo: { activo: true, contrasena_actual: 'Equivocada9' } }; }, espera: { estado: 422, codigo: 'USR-010' } },
+          { titulo: 'Falta indicar activo', tipo: 'validacion', peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/dos-pasos', cuerpo: { contrasena_actual: 'Equivocada9' } }; }, espera: { estado: 422, codigo: 'VAL-001', validacion: 'activo' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'PUT', ruta: '/cuenta/dos-pasos', sesion: false, cuerpo: { activo: true, contrasena_actual: 'x' } }; }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'cerrar-sesiones', metodo: 'POST', ruta: '/cuenta/cerrar-sesiones', titulo: 'Cerrar todas mis sesiones', acceso: 'sesión', necesita: ['token'],
+        sirve: 'Invalida todos los tokens ya emitidos de tu cuenta (incluido el actual): desde ese momento responden 401.',
+        notas: ['Es el «cerrar sesión» del servidor: sirve si perdiste un dispositivo o sospechas de un token robado.', 'Cambiar o restablecer la contraseña hace lo mismo automáticamente.'],
+        casos: [
+          { titulo: 'Cerrar sesiones', tipo: 'ok', manual: true, descripcion: 'Después tendrás que iniciar sesión otra vez: el token guardado deja de servir.',
+            peticion: function () { return { metodo: 'POST', ruta: '/cuenta/cerrar-sesiones' }; }, espera: { estado: 200 },
+            despues: function (r, c) {
+              return c.pedir({ metodo: 'GET', ruta: '/cuenta/perfil' }).then(function (p) {
+                if (p.estado !== 401) { throw new Error('El token anterior debería responder 401 y respondió ' + p.estado); }
+                c.e.poner('token', '');
+              });
+            } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', necesita: [], peticion: function () { return { metodo: 'POST', ruta: '/cuenta/cerrar-sesiones', sesion: false }; }, espera: { estado: 401, codigo: 'SEG-007' } }
         ]
       },
       {

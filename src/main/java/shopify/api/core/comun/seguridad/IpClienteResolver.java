@@ -26,18 +26,45 @@ public class IpClienteResolver {
     /** Huella SHA-256 del secreto; {@code null} si el secreto está vacío y la cabecera no se confía nunca. */
     private final byte[] huellaSecreto;
 
-    public IpClienteResolver(@Value("${app.proxy.secreto:}") String secreto) {
+    /**
+     * A-007: cabecera que pone el proxy de la plataforma con la IP real (en Railway, {@code X-Real-IP}). Solo debe
+     * configurarse cuando la API no es alcanzable sin pasar por ese proxy, porque entonces el cliente no puede
+     * falsificarla. Vacía = no se usa.
+     */
+    private final String cabeceraPlataforma;
+
+    public IpClienteResolver(@Value("${app.proxy.secreto:}") String secreto,
+                             @Value("${app.proxy.cabecera-ip:}") String cabeceraPlataforma) {
         this.huellaSecreto = secreto == null || secreto.isBlank() ? null : huella(secreto);
+        this.cabeceraPlataforma = cabeceraPlataforma == null || cabeceraPlataforma.isBlank() ? null : cabeceraPlataforma.strip();
     }
 
     /** La IP de {@code X-Forwarded-For} si el proxy está autenticado y es una IP válida; si no, la IP de la conexión. */
     public String ipDe(HttpServletRequest request) {
-        String ipConexion = request.getRemoteAddr();
+        String ipConexion = ipDePlataforma(request);
         if (huellaSecreto == null || !secretoCoincide(request.getHeader(CABECERA_SECRETO))) {
             return ipConexion;
         }
         String reenviada = request.getHeader(CABECERA_IP);
         return esIp(reenviada) ? reenviada.strip() : ipConexion;
+    }
+
+    /**
+     * IP que ve el proxy de la plataforma, o la de la conexión si no hay cabecera configurada o no trae una IP.
+     * Si la cabecera trae una lista (formato de X-Forwarded-For), vale la última: es la que añadió el proxy más cercano.
+     */
+    private String ipDePlataforma(HttpServletRequest request) {
+        String ipConexion = request.getRemoteAddr();
+        if (cabeceraPlataforma == null) {
+            return ipConexion;
+        }
+        String valor = request.getHeader(cabeceraPlataforma);
+        if (valor == null) {
+            return ipConexion;
+        }
+        String[] partes = valor.split(",");
+        String ultima = partes[partes.length - 1].strip();
+        return esIp(ultima) ? ultima : ipConexion;
     }
 
     /** Compara huellas de longitud fija con {@link MessageDigest#isEqual}: el tiempo no depende del secreto. */

@@ -17,6 +17,8 @@ import java.util.UUID;
 @Component
 public class JwtProveedor {
 
+    private static final String CLAIM_EMITIDO_MS = "emitido_ms";
+
     private final SecretKey claveFirma;
     private final long tiempoExpiracionMs;
 
@@ -40,6 +42,8 @@ public class JwtProveedor {
                 .subject(usuarioId.toString())
                 .claim("correo", correo)
                 .claims(claimsAdicionales)
+                // A-007: "iat" solo guarda segundos; para revocar sesiones se compara con milisegundos
+                .claim(CLAIM_EMITIDO_MS, ahora.getTime())
                 .issuedAt(ahora)
                 .expiration(fechaExpiracion)
                 .signWith(this.claveFirma)
@@ -59,6 +63,19 @@ public class JwtProveedor {
     public UUID extraerUsuarioId(String token) {
         Claims claims = extraerTodosLosClaims(token);
         return UUID.fromString(claims.getSubject());
+    }
+
+    /**
+     * A-007: instante de emisión del token (milisegundos si el token los trae; si no, el "iat" en segundos).
+     * Sirve para rechazar tokens emitidos antes de un cambio de clave o de un cierre de sesiones.
+     */
+    public Instant extraerEmitido(String token) {
+        Claims claims = extraerTodosLosClaims(token);
+        Long milisegundos = claims.get(CLAIM_EMITIDO_MS, Long.class);
+        if (milisegundos != null) {
+            return Instant.ofEpochMilli(milisegundos);
+        }
+        return claims.getIssuedAt() == null ? Instant.EPOCH : claims.getIssuedAt().toInstant();
     }
 
     /**

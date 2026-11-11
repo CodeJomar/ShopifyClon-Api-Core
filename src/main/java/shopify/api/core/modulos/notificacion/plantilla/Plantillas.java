@@ -22,6 +22,21 @@ public final class Plantillas {
                 "Hola " + nombres + ",\n\nTu código para restablecer la contraseña es: " + codigo + " (vence en 30 minutos).");
     }
 
+    public static Mensaje cuentaBloqueada(String nombres, String codigo, long minutos) {
+        return new Mensaje("Bloqueamos temporalmente tu cuenta",
+                "Hola " + nombres + ",\n\nDetectamos varios intentos fallidos de inicio de sesión en tu cuenta y la "
+                        + "bloqueamos durante " + minutos + " minutos para protegerla.\n\n"
+                        + "Si fuiste tú, puedes desbloquearla ahora con este código: " + codigo + " (vence en 30 minutos).\n\n"
+                        + "Si no fuiste tú, nadie entró: tu contraseña sigue protegida. Te recomendamos cambiarla "
+                        + "y activar la verificación en dos pasos.");
+    }
+
+    public static Mensaje segundoFactor(String nombres, String codigo) {
+        return new Mensaje("Tu código para iniciar sesión",
+                "Hola " + nombres + ",\n\nTu código para terminar de iniciar sesión es: " + codigo
+                        + " (vence en 10 minutos).\n\nSi no intentaste entrar, alguien conoce tu contraseña: cámbiala cuanto antes.");
+    }
+
     public static Mensaje ordenCreadaComprador(String numero, String nombre, BigDecimal total, String moneda, String enlace) {
         return new Mensaje("Recibimos tu orden " + numero,
                 "Hola " + nombre + ",\n\nRecibimos tu orden " + numero + " por " + total.toPlainString() + " " + moneda

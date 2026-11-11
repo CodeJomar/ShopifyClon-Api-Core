@@ -1,5 +1,7 @@
 package shopify.api.core.modulos.usuario.servicio;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ public class RecuperacionClaveServicio {
 
     private final UsuarioRepositorio usuarioRepositorio;
     private final CodigoSeguridadServicio codigoSeguridadServicio;
+    private final ContrasenasComunes contrasenasComunes;
     private final PasswordEncoder passwordEncoder;
     private final PublicadorEvento publicadorEvento;
 
@@ -39,9 +42,15 @@ public class RecuperacionClaveServicio {
                 .buscarVigentePorCorreo(AutenticacionServicio.normalizar(request.correoElectronico()))
                 .orElseThrow(() -> new ReglaNegocioException("USR-012", CodigoSeguridadServicio.MENSAJE_CODIGO_INVALIDO));
 
+        // Antes de consumir el código: una clave rechazada no debe gastar el código
+        contrasenasComunes.exigirSegura(request.contrasenaNueva(), usuario.getCorreoElectronico());
         codigoSeguridadServicio.verificarYConsumir(usuario.getId(), TipoCodigoSeguridad.RECUPERACION_CLAVE, request.codigo());
 
         usuario.setContrasenaHash(passwordEncoder.encode(request.contrasenaNueva()));
+        // A-007: restablecer la clave cierra las sesiones abiertas y levanta el bloqueo por intentos fallidos
+        usuario.setSesionesValidasDesde(Instant.now().truncatedTo(ChronoUnit.MILLIS));
+        usuario.setIntentosLoginFallidos(0);
+        usuario.setBloqueadoHasta(null);
         usuarioRepositorio.save(usuario);
         codigoSeguridadServicio.invalidarPendientes(usuario.getId(), TipoCodigoSeguridad.RECUPERACION_CLAVE);
     }
