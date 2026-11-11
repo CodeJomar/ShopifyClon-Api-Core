@@ -55,10 +55,14 @@ public class SecurityConfig {
 
                 // Reglas de autorización de endpoints
                 .authorizeHttpRequests(auth -> auth
+                        // Ticket efímero WebSocket: requiere sesión JWT aunque viva bajo /auth/**
+                        .requestMatchers(HttpMethod.POST, "/auth/ws-ticket").authenticated()
                         // Rutas públicas
                         .requestMatchers("/auth/**", "/vitrina/**", "/webhooks/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/planes", "/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/seguimiento/*").permitAll()
+                        // Handshake HTTP de WebSocket STOMP (la autenticación JWT/ticket se valida en el CONNECT STOMP)
+                        .requestMatchers(HttpMethod.GET, "/ws", "/ws/**").permitAll()
                         // Laboratorio de endpoints (solo páginas estáticas; ver LaboratorioConfig)
                         .requestMatchers(HttpMethod.GET, "/laboratorio", "/laboratorio/**").permitAll()
 
