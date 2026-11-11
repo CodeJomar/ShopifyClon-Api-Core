@@ -32,7 +32,9 @@
       ['seguimiento.html', 'Seguimiento público']]],
     ['Administración', [
       ['metricas.html', 'Métricas'],
-      ['plataforma.html', 'Plataforma']]]
+      ['plataforma.html', 'Plataforma']]],
+    ['Tiempo real', [
+      ['tiempo-real.html', 'Notificaciones WebSocket']]]
   ];
 
   // ---------- estado persistente ----------
@@ -50,6 +52,7 @@
     poner: function (k, v) {
       if (v === undefined || v === null || v === '') { delete datos[k]; delete memoria[k]; } else { datos[k] = v; }
       persistir(); pintarEstado();
+      try { window.dispatchEvent(new CustomEvent('lab:estado', { detail: { clave: k, valor: v } })); } catch (_) {}
     },
     ponerSoloMemoria: function (k, v) { memoria[k] = v; try { sessionStorage.setItem('lab-' + k, v); } catch (_) {} },
     recuperarMemoria: function (k) { try { return memoria[k] || sessionStorage.getItem('lab-' + k) || ''; } catch (_) { return memoria[k] || ''; } },

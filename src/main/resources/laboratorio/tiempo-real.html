@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tiempo real (WebSocket) · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+  <style>
+    .ws-caja { padding: 14px 16px; margin-bottom: 20px; }
+    .ws-caja h2 { font-size: 16px; margin-bottom: 6px; }
+    .ws-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .ws-tarjeta { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .ws-tarjeta h3 { font-size: 16px; }
+    .ws-subtitulo { margin: 0; font-size: 13px; color: var(--suave); }
+    .ws-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .ws-estado { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12.5px; }
+    .ws-pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--borde); background: var(--codigo); font-weight: 600; }
+    .ws-pill.conectado { background: var(--ok-fondo); border-color: var(--ok); color: var(--ok); }
+    .ws-pill.error { background: var(--error-fondo); border-color: var(--error); color: var(--error); }
+    .ws-pill.conectando { background: var(--aviso-fondo); border-color: var(--aviso); color: var(--aviso); }
+    .ws-feed { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; border: 1px solid var(--borde); border-radius: 8px; padding: 10px; background: var(--fondo); }
+    .ws-vacio { color: var(--suave); font-size: 13px; margin: 0; }
+    .ws-item { border: 1px solid var(--borde); border-radius: 8px; background: var(--superficie); overflow: hidden; }
+    .ws-item-cab { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 7px 10px; background: var(--codigo); font-size: 13px; }
+    .ws-badge { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--acento-fondo); color: var(--acento); }
+    .ws-badge.ORDEN_PAGADA, .ws-badge.ENVIO_ENTREGADO { background: var(--ok-fondo); color: var(--ok); }
+    .ws-badge.ORDEN_CANCELADA, .ws-badge.ERROR { background: var(--error-fondo); color: var(--error); }
+    .ws-badge.ENVIO_DESPACHADO { background: var(--aviso-fondo); color: var(--aviso); }
+    .ws-item-meta { padding: 6px 10px; font-size: 13px; color: var(--suave); display: flex; flex-wrap: wrap; gap: 10px; }
+    .ws-resumen-comprador { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--borde); background: var(--codigo); font-size: 13px; display: flex; flex-wrap: wrap; gap: 12px; }
+    .ws-disparadores { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .ws-log-accion { margin-top: 8px; font-size: 12.5px; color: var(--suave); }
+    @media (max-width: 960px) { .ws-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script src="assets/stomp-cliente.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  var h = Lab.h;
+
+  function wsUrlPorDefecto() {
+    var base = Lab.estado.obtener('base').replace(/\/+$/, '');
+    return base.replace(/^https:\/\//i, 'wss://').replace(/^http:\/\//i, 'ws://') + '/ws';
+  }
+
+  function ahoraHora() {
+    return new Date().toLocaleTimeString('es-PE', { hour12: false });
+  }
+
+  function crearConsola(contenido) {
+    var inputWsUrl = h('input', { value: wsUrlPorDefecto() });
+    var btnRestaurar = h('button', {
+      class: 'chico',
+      texto: 'Usar URL de la API',
+      onclick: function () { inputWsUrl.value = wsUrlPorDefecto(); }
+    });
+
+    contenido.appendChild(h('div', { class: 'panel ws-caja' },
+      h('h2', { texto: 'Conexión STOMP sobre WebSocket' }),
+      h('p', { class: 'ws-subtitulo', texto: 'Conecta en vivo a /api/v1/ws (ws:// en local o wss:// en Railway) con heartbeats cada 10 s.' }),
+      h('div', { class: 'campos' },
+        h('div', { class: 'campo' }, h('label', { texto: 'Endpoint WebSocket (STOMP)' }), inputWsUrl)),
+      h('div', { class: 'ws-acciones' }, btnRestaurar)));
+
+    // ---- Tarjeta 1: Panel del comerciante ----
+    var selectModo = h('select', null,
+      h('option', { value: 'ticket', texto: 'Ticket efímero (POST /auth/ws-ticket)' }),
+      h('option', { value: 'jwt', texto: 'Bearer JWT (sesión actual)' }),
+      h('option', { value: 'anonimo', texto: 'Anónimo (prueba de bloqueo)' }));
+    var inputTienda = h('input', { value: Lab.estado.obtener('tiendaId') || '', placeholder: 'UUID de la tienda' });
+    var pillTienda = h('span', { class: 'ws-pill', texto: 'Desconectado' });
+    var infoTienda = h('span', { class: 'espera', texto: 'Mensajes: 0 · Heartbeats: 0' });
+    var feedTienda = h('div', { class: 'ws-feed' }, h('p', { class: 'ws-vacio', texto: 'Aún no hay eventos en el canal de la tienda.' }));
+    var metricasTienda = { mensajes: 0, hb: 0 };
+    var clienteTienda = null;
+
+    function refrescarInfoTienda() {
+      infoTienda.textContent = 'Mensajes: ' + metricasTienda.mensajes + ' · Heartbeats: ' + metricasTienda.hb;
+    }
+
+    function agregarTarjetaFeed(feed, vacioTexto, tipo, resumen, payload) {
+      if (feed.firstChild && feed.firstChild.classList && feed.firstChild.classList.contains('ws-vacio')) {
+        feed.innerHTML = '';
+      }
+      var nodo = h('div', { class: 'ws-item' },
+        h('div', { class: 'ws-item-cab' },
+          h('span', { class: 'ws-badge ' + tipo, texto: tipo }),
+          h('span', { class: 'espera', texto: ahoraHora() })),
+        resumen ? h('div', { class: 'ws-item-meta', texto: resumen }) : null,
+        h('details', { class: 'json' },
+          h('summary', { texto: 'Payload JSON' }),
+          h('pre', { texto: JSON.stringify(payload, null, 2) })));
+      feed.insertBefore(nodo, feed.firstChild);
+    }
+
+    function obtenerHeadersTienda() {
+      var modo = selectModo.value;
+      if (modo === 'anonimo') { return Promise.resolve({}); }
+      if (modo === 'jwt') {
+        var tk = Lab.estado.obtener('token');
+        if (!tk) { return Promise.reject(new Error('No hay sesión JWT iniciada en el estado del laboratorio.')); }
+        return Promise.resolve({ Authorization: 'Bearer ' + tk });
+      }
+      if (!Lab.estado.obtener('token')) {
+        return Promise.reject(new Error('Para pedir un ticket efímero primero inicia sesión en Cuenta y sesión.'));
+      }
+      return Lab.pedir({ metodo: 'POST', ruta: '/auth/ws-ticket' }).then(function (r) {
+        var datos = Lab.exigir(r, 200, 'Emitir ticket WS');
+        return { 'X-Ws-Ticket': datos.ticket };
+      });
+    }
+
+    function conectarTienda(destinoOverride) {
+      var tiendaId = (destinoOverride ? '' : inputTienda.value.trim());
+      var destino = destinoOverride || ('/topic/tienda/' + tiendaId + '/ordenes');
+      if (!destinoOverride && !tiendaId) {
+        agregarTarjetaFeed(feedTienda, '', 'ERROR', 'Falta tiendaId en el campo o en el estado.', { error: 'tiendaId requerido' });
+        return;
+      }
+      if (clienteTienda) { clienteTienda.desconectar(); }
+      pillTienda.className = 'ws-pill conectando';
+      pillTienda.textContent = 'Conectando…';
+
+      obtenerHeadersTienda().then(function (headers) {
+        clienteTienda = LabStomp.crearCliente({
+          url: inputWsUrl.value.trim(),
+          headers: headers,
+          heartbeatMs: 10000,
+          onEstado: function (st, det) {
+            pillTienda.className = 'ws-pill ' + (st === 'conectado' ? 'conectado' : (st === 'error' ? 'error' : (st === 'conectando' ? 'conectando' : '')));
+            pillTienda.textContent = st === 'conectado' ? 'Conectado (' + selectModo.value + ')' : (st + (det ? ': ' + det : ''));
+          },
+          onHeartbeat: function () {
+            metricasTienda.hb += 1;
+            refrescarInfoTienda();
+          },
+          onConectado: function () {
+            clienteTienda.suscribir(destino, function (msg) {
+              metricasTienda.mensajes += 1;
+              refrescarInfoTienda();
+              var j = msg.json || {};
+              var resumen = [
+                j.numero_orden || 'Orden',
+                j.estado_pago ? ('pago: ' + j.estado_pago) : null,
+                j.estado_preparacion ? ('prep: ' + j.estado_preparacion) : null,
+                j.total !== undefined ? (j.total + (j.moneda ? ' ' + j.moneda : '')) : null,
+                j.numero_guia ? ('guía: ' + j.numero_guia) : null,
+                j.motivo ? ('motivo: ' + j.motivo) : null
+              ].filter(Boolean).join(' · ');
+              agregarTarjetaFeed(feedTienda, '', j.tipo || 'MENSAJE', resumen, j.tipo ? j : msg);
+            });
+          },
+          onError: function (trama) {
+            agregarTarjetaFeed(feedTienda, '', 'ERROR', trama.cabeceras && trama.cabeceras.message ? trama.cabeceras.message : 'Rechazado por el servidor', trama);
+          }
+        });
+        clienteTienda.conectar();
+      }).catch(function (err) {
+        pillTienda.className = 'ws-pill error';
+        pillTienda.textContent = 'Error';
+        agregarTarjetaFeed(feedTienda, '', 'ERROR', err.message, { mensaje: err.message });
+      });
+    }
+
+    var tarjetaTienda = h('section', { class: 'panel ws-tarjeta' },
+      h('h3', { texto: '1. Panel del comerciante (/topic/tienda/{tiendaId}/ordenes)' }),
+      h('p', { class: 'ws-subtitulo', texto: 'Recibe nuevas órdenes, pagos confirmados, cancelaciones y avances de envío en vivo.' }),
+      h('div', { class: 'campos' },
+        h('div', { class: 'campo' }, h('label', { texto: 'Autenticación CONNECT' }), selectModo),
+        h('div', { class: 'campo' }, h('label', { texto: 'tiendaId' }), inputTienda)),
+      h('div', { class: 'ws-estado' }, pillTienda, infoTienda),
+      h('div', { class: 'ws-acciones' },
+        h('button', { class: 'primario chico', texto: 'Conectar y suscribir', onclick: function () { conectarTienda(null); } }),
+        h('button', { class: 'chico', texto: 'Desconectar', onclick: function () { if (clienteTienda) { clienteTienda.desconectar(); } } }),
+        h('button', { class: 'chico', texto: 'Probar tienda ajena (seguridad)', onclick: function () { conectarTienda('/topic/tienda/' + Lab.uuid() + '/ordenes'); } }),
+        h('button', {
+          class: 'chico',
+          texto: 'Probar SEND directo (bloqueado)',
+          onclick: function () {
+            if (!clienteTienda || !clienteTienda.estaConectado()) {
+              agregarTarjetaFeed(feedTienda, '', 'ERROR', 'Conecta primero el WebSocket del comerciante para probar SEND.', { mensaje: 'No conectado' });
+              return;
+            }
+            try { clienteTienda.enviar('/topic/tienda/' + (inputTienda.value.trim() || Lab.uuid()) + '/ordenes', { tipo: 'FALSO' }); }
+            catch (err) { agregarTarjetaFeed(feedTienda, '', 'ERROR', err.message, { mensaje: err.message }); }
+          }
+        }),
+        h('button', {
+          class: 'chico',
+          texto: 'Limpiar feed',
+          onclick: function () { metricasTienda.mensajes = 0; refrescarInfoTienda(); feedTienda.innerHTML = ''; feedTienda.appendChild(h('p', { class: 'ws-vacio', texto: 'Feed limpio.' })); }
+        })),
+      feedTienda);
+
+    // ---- Tarjeta 2: Comprador público ----
+    var inputTokenOrden = h('input', { value: Lab.estado.obtener('tokenAcceso') || '', placeholder: 'token_acceso de la orden' });
+    var pillComprador = h('span', { class: 'ws-pill', texto: 'Desconectado' });
+    var infoComprador = h('span', { class: 'espera', texto: 'Mensajes: 0 · Heartbeats: 0' });
+    var resumenComprador = h('div', { class: 'ws-resumen-comprador' },
+      h('span', null, 'Orden: ', h('b', { id: 'ws-comp-num', texto: Lab.estado.obtener('numeroOrden') || '—' })),
+      h('span', null, 'Pago: ', h('b', { id: 'ws-comp-pago', texto: '—' })),
+      h('span', null, 'Preparación: ', h('b', { id: 'ws-comp-prep', texto: '—' })),
+      h('span', null, 'Guía: ', h('b', { id: 'ws-comp-guia', texto: Lab.estado.obtener('guia') || '—' })));
+    var feedComprador = h('div', { class: 'ws-feed' }, h('p', { class: 'ws-vacio', texto: 'Aún no hay eventos en el canal del comprador.' }));
+    var metricasComprador = { mensajes: 0, hb: 0 };
+    var clienteComprador = null;
+
+    function refrescarInfoComprador() {
+      infoComprador.textContent = 'Mensajes: ' + metricasComprador.mensajes + ' · Heartbeats: ' + metricasComprador.hb;
+    }
+
+    function conectarComprador(tokenOverride) {
+      var tokenAcceso = tokenOverride || inputTokenOrden.value.trim();
+      if (!tokenAcceso) {
+        agregarTarjetaFeed(feedComprador, '', 'ERROR', 'Falta tokenAcceso (usa «Comprar el carrito» arriba o abajo).', { error: 'tokenAcceso requerido' });
+        return;
+      }
+      if (clienteComprador) { clienteComprador.desconectar(); }
+      pillComprador.className = 'ws-pill conectando';
+      pillComprador.textContent = 'Conectando…';
+
+      clienteComprador = LabStomp.crearCliente({
+        url: inputWsUrl.value.trim(),
+        headers: {}, // Comprador invitado: conexión anónima autorizada únicamente por su token_acceso
+        heartbeatMs: 10000,
+        onEstado: function (st, det) {
+          pillComprador.className = 'ws-pill ' + (st === 'conectado' ? 'conectado' : (st === 'error' ? 'error' : (st === 'conectando' ? 'conectando' : '')));
+          pillComprador.textContent = st === 'conectado' ? 'Conectado (anónimo)' : (st + (det ? ': ' + det : ''));
+        },
+        onHeartbeat: function () {
+          metricasComprador.hb += 1;
+          refrescarInfoComprador();
+        },
+        onConectado: function () {
+          clienteComprador.suscribir('/topic/ordenes/' + tokenAcceso, function (msg) {
+            metricasComprador.mensajes += 1;
+            refrescarInfoComprador();
+            var j = msg.json || {};
+            if (j.numero_orden) { document.getElementById('ws-comp-num').textContent = j.numero_orden; }
+            if (j.estado_pago) { document.getElementById('ws-comp-pago').textContent = j.estado_pago; }
+            if (j.estado_preparacion) { document.getElementById('ws-comp-prep').textContent = j.estado_preparacion; }
+            if (j.numero_guia) { document.getElementById('ws-comp-guia').textContent = j.numero_guia + (j.transportista ? ' (' + j.transportista + ')' : ''); }
+            var resumen = [
+              j.numero_orden || 'Orden',
+              j.estado ? ('estado: ' + j.estado) : null,
+              j.estado_pago ? ('pago: ' + j.estado_pago) : null,
+              j.estado_preparacion ? ('prep: ' + j.estado_preparacion) : null,
+              j.numero_guia ? ('guía: ' + j.numero_guia) : null,
+              j.motivo ? ('motivo: ' + j.motivo) : null
+            ].filter(Boolean).join(' · ');
+            agregarTarjetaFeed(feedComprador, '', j.tipo || 'MENSAJE', resumen, j.tipo ? j : msg);
+          });
+        },
+        onError: function (trama) {
+          agregarTarjetaFeed(feedComprador, '', 'ERROR', trama.cabeceras && trama.cabeceras.message ? trama.cabeceras.message : 'Rechazado por el servidor', trama);
+        }
+      });
+      clienteComprador.conectar();
+    }
+
+    var tarjetaComprador = h('section', { class: 'panel ws-tarjeta' },
+      h('h3', { texto: '2. Vista del comprador (/topic/ordenes/{tokenAcceso})' }),
+      h('p', { class: 'ws-subtitulo', texto: 'Conexión anónima autorizada por el token criptográfico de la orden. Cambia a PAGADO y muestra despacho/entrega sin recargar.' }),
+      h('div', { class: 'campos' },
+        h('div', { class: 'campo' }, h('label', { texto: 'tokenAcceso (invitado)' }), inputTokenOrden)),
+      h('div', { class: 'ws-estado' }, pillComprador, infoComprador),
+      resumenComprador,
+      h('div', { class: 'ws-acciones' },
+        h('button', { class: 'primario chico', texto: 'Conectar y suscribir', onclick: function () { conectarComprador(null); } }),
+        h('button', { class: 'chico', texto: 'Desconectar', onclick: function () { if (clienteComprador) { clienteComprador.desconectar(); } } }),
+        h('button', { class: 'chico', texto: 'Probar token falso (seguridad)', onclick: function () { conectarComprador('token-inexistente-' + Lab.azar(12)); } }),
+        h('button', {
+          class: 'chico',
+          texto: 'Limpiar feed',
+          onclick: function () { metricasComprador.mensajes = 0; refrescarInfoComprador(); feedComprador.innerHTML = ''; feedComprador.appendChild(h('p', { class: 'ws-vacio', texto: 'Feed limpio.' })); }
+        })),
+      feedComprador);
+
+    contenido.appendChild(h('div', { class: 'ws-grid' }, tarjetaTienda, tarjetaComprador));
+
+    // ---- Disparadores en vivo para probar en la misma pestaña ----
+    var salidaAccion = h('div', { class: 'ws-log-accion', texto: 'Conecta uno o ambos canales arriba y dispara transiciones reales desde aquí:' });
+    function correr(etiqueta, fn) {
+      salidaAccion.textContent = '▶ ' + etiqueta + '…';
+      var ctx = { e: Lab.estado, log: function (t) { salidaAccion.textContent = t; }, pedir: Lab.pedir, exigir: Lab.exigir, azar: Lab.azar, uuid: Lab.uuid, fecha: Lab.fecha };
+      Promise.resolve().then(function () { return fn(ctx); }).then(function (msg) {
+        if (msg) { salidaAccion.textContent = '✔ ' + msg; }
+      }).catch(function (err) {
+        salidaAccion.textContent = '✘ ' + err.message;
+      });
+    }
+
+    contenido.appendChild(h('div', { class: 'panel ws-caja' },
+      h('h2', { texto: 'Disparadores rápidos en vivo' }),
+      h('p', { class: 'ws-subtitulo', texto: 'Ejecutan peticiones HTTP reales contra la API mientras escuchas los eventos en los paneles de arriba (también puedes abrir otra pestaña).' }),
+      h('div', { style: 'height:8px' }),
+      h('div', { class: 'ws-disparadores' },
+        h('button', {
+          texto: '1. Nueva orden (carrito + checkout)',
+          onclick: function () {
+            correr('Creando carrito y orden', function (c) {
+              return R.crearCarrito.ejecutar(c).then(function () { return R.hacerCheckout.ejecutar(c); }).then(function () {
+                return 'Orden ' + c.e.obtener('numeroOrden') + ' creada (tokenAcceso actualizado arriba).';
+              });
+            });
+          }
+        }),
+        h('button', {
+          texto: '2. Pagar orden manual',
+          onclick: function () {
+            correr('Registrando pago manual', function (c) {
+              return R.pagarOrden.ejecutar(c).then(function () { return 'Pago registrado para ' + c.e.obtener('numeroOrden'); });
+            });
+          }
+        }),
+        h('button', {
+          texto: '3. Preparar + Despachar envío',
+          onclick: function () {
+            correr('Creando y despachando envío', function (c) {
+              return R.crearEnvio.ejecutar(c).then(function () {
+                return c.pedir({ metodo: 'POST', ruta: '/panel/envios/' + c.e.obtener('envioId') + '/despachar', tienda: true });
+              }).then(function (r) {
+                var d = c.exigir(r, 200, 'Despachar envío');
+                return 'Envío despachado: guía ' + d.numero_guia;
+              });
+            });
+          }
+        }),
+        h('button', {
+          texto: '4. Entregar envío',
+          onclick: function () {
+            correr('Entregando envío', function (c) {
+              if (!c.e.obtener('envioId')) { throw new Error('Falta envioId: ejecuta antes «Preparar + Despachar envío».'); }
+              return c.pedir({ metodo: 'POST', ruta: '/panel/envios/' + c.e.obtener('envioId') + '/entregar', tienda: true, cuerpo: { nota: 'Entregado en demo WebSocket' } })
+                .then(function (r) { c.exigir(r, 200, 'Entregar envío'); return 'Envío entregado para ' + c.e.obtener('numeroOrden'); });
+            });
+          }
+        }),
+        h('button', {
+          texto: 'Cancelar orden actual (sin preparar)',
+          onclick: function () {
+            correr('Cancelando orden', function (c) {
+              if (!c.e.obtener('ordenId')) { throw new Error('Falta ordenId.'); }
+              return c.pedir({ metodo: 'POST', ruta: '/panel/ordenes/' + c.e.obtener('ordenId') + '/cancelar', tienda: true, cuerpo: { motivo: 'CLIENTE', detalle: 'Cancelada desde laboratorio tiempo real' } })
+                .then(function (r) { c.exigir(r, 200, 'Cancelar orden'); return 'Orden ' + c.e.obtener('numeroOrden') + ' cancelada'; });
+            });
+          }
+        })),
+      salidaAccion));
+
+    // Sincronizar campos cuando cambie el estado global del laboratorio (por recetas o triggers)
+    window.addEventListener('lab:estado', function (ev) {
+      if (!ev.detail) { return; }
+      if (ev.detail.clave === 'tiendaId') { inputTienda.value = ev.detail.valor || ''; }
+      if (ev.detail.clave === 'tokenAcceso') { inputTokenOrden.value = ev.detail.valor || ''; }
+      if (ev.detail.clave === 'numeroOrden') {
+        var el = document.getElementById('ws-comp-num');
+        if (el) { el.textContent = ev.detail.valor || '—'; }
+      }
+      if (ev.detail.clave === 'guia') {
+        var elG = document.getElementById('ws-comp-guia');
+        if (elG) { elG.textContent = ev.detail.valor || '—'; }
+      }
+      if (ev.detail.clave === 'base') { inputWsUrl.value = wsUrlPorDefecto(); }
+    });
+
+    window.addEventListener('beforeunload', function () {
+      if (clienteTienda) { clienteTienda.desconectar(); }
+      if (clienteComprador) { clienteComprador.desconectar(); }
+    });
+  }
+
+  Lab.pagina({
+    archivo: 'tiempo-real.html',
+    titulo: 'Tiempo real (WebSocket STOMP)',
+    descripcion: 'Prueba en vivo de notificaciones STOMP para el panel de tienda y el comprador invitado, más emisión de ticket efímero.',
+    avisos: [
+      'Endpoint STOMP nativo: `/api/v1/ws` (`ws://` en local, `wss://` en Railway). Canales permitidos: `/topic/tienda/{tiendaId}/ordenes` (requiere sesión y permiso `ORDENES_VER`) y `/topic/ordenes/{tokenAcceso}` (anónimo con token válido).',
+      'En **Railway**, configura `FORWARD_HEADERS_STRATEGY=framework` (o incluye el origen `https://...` de la API en `CORS_ORIGENES_PERMITIDOS`) para que el handshake del laboratorio pase la validación de origen detrás del proxy TLS.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearTarifa, R.crearProducto, R.crearCarrito, R.hacerCheckout],
+    antes: crearConsola,
+    endpoints: [
+      {
+        id: 'ws-ticket',
+        metodo: 'POST',
+        ruta: '/auth/ws-ticket',
+        titulo: 'Emitir ticket efímero para WebSocket',
+        acceso: 'sesión JWT (30 por minuto)',
+        necesita: ['token'],
+        sirve: 'Genera un ticket de un solo uso (~60 s) para enviar en la cabecera STOMP `X-Ws-Ticket` desde frontends cuyo JWT vive en cookie httpOnly.',
+        notas: ['El ticket se invalida al primer `CONNECT` (o al caducar) y vuelve a comprobar si la sesión fue revocada.'],
+        casos: [
+          {
+            titulo: 'Emitir ticket con sesión activa',
+            tipo: 'ok',
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/ws-ticket' }; },
+            espera: {
+              estado: 200,
+              verifica: function (r) {
+                var d = r.json && r.json.datos;
+                if (!d || !d.ticket || !d.expira_en || !d.ttl_segundos) {
+                  return 'La respuesta debería incluir ticket, expira_en y ttl_segundos';
+                }
+                return '';
+              }
+            }
+          },
+          {
+            titulo: 'Sin sesión JWT responde 401',
+            tipo: 'seguridad',
+            necesita: [],
+            peticion: function () { return { metodo: 'POST', ruta: '/auth/ws-ticket', sesion: false }; },
+            espera: { estado: 401, codigo: 'SEG-007' }
+          }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>
