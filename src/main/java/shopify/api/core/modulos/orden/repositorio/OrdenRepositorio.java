@@ -21,6 +21,8 @@ public interface OrdenRepositorio extends JpaRepository<OrdenEntidad, UUID> {
 
     Optional<OrdenEntidad> findFirstByIdAndEliminadoFalse(UUID id);
 
+    boolean existsByTokenAccesoAndEliminadoFalse(String tokenAcceso);
+
     /** Bloqueo de la orden para una transición de estado (FOR UPDATE; se libera al commit). */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM OrdenEntidad o WHERE o.id = :id AND o.tiendaId = :tiendaId AND o.eliminado = FALSE")

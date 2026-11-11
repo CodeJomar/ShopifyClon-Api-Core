@@ -9,6 +9,7 @@ import org.springframework.web.filter.CorsFilter;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import shopify.api.core.comun.util.OrigenesPermitidos;
 
 @Configuration
 public class CorsConfig {
@@ -16,8 +17,7 @@ public class CorsConfig {
     private final List<String> origenesPermitidos;
 
     public CorsConfig(@Value("${app.cors.origenes-permitidos:http://localhost:3000}") String origenes) {
-        this.origenesPermitidos = Arrays.stream(origenes.split(","))
-                .map(String::strip).filter(o -> !o.isEmpty()).toList();
+        this.origenesPermitidos = OrigenesPermitidos.desdeCsv(origenes);
     }
 
     @Bean

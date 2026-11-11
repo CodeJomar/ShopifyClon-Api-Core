@@ -19,8 +19,10 @@ import shopify.api.core.modulos.usuario.dto.request.RegistroRequest;
 import shopify.api.core.modulos.usuario.dto.request.RestablecerClaveRequest;
 import shopify.api.core.modulos.usuario.dto.response.LoginResponse;
 import shopify.api.core.modulos.usuario.dto.response.RegistroResponse;
+import shopify.api.core.modulos.usuario.dto.response.TicketWebSocketResponse;
 import shopify.api.core.modulos.usuario.servicio.AutenticacionServicio;
 import shopify.api.core.modulos.usuario.servicio.RecuperacionClaveServicio;
+import shopify.api.core.modulos.usuario.servicio.TicketWebSocketServicio;
 
 @Tag(name = "Autenticación", description = "Registro, activación, inicio de sesión y recuperación de clave")
 @RestController
@@ -30,6 +32,14 @@ public class AutenticacionControlador {
 
     private final AutenticacionServicio autenticacionServicio;
     private final RecuperacionClaveServicio recuperacionClaveServicio;
+    private final TicketWebSocketServicio ticketWebSocketServicio;
+
+    @Operation(summary = "Emitir ticket efímero de un solo uso para conectar al WebSocket")
+    @PostMapping("/ws-ticket")
+    @LimitarPeticiones(porMinuto = 30)
+    public ResponseEntity<RespuestaApi<TicketWebSocketResponse>> emitirTicketWebSocket() {
+        return RespuestaApi.ok(ticketWebSocketServicio.emitirParaUsuarioActual(), "Ticket WebSocket emitido");
+    }
 
     @Operation(summary = "Registrar una cuenta (queda sin activar y recibe un código por correo)")
     @PostMapping("/registro")

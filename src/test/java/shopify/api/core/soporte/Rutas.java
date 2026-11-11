@@ -11,6 +11,7 @@ public final class Rutas {
     public static final String AUTH_ACTIVAR = "/auth/activar";
     public static final String AUTH_REENVIAR_ACTIVACION = "/auth/reenviar-activacion";
     public static final String AUTH_LOGIN = "/auth/login";
+    public static final String AUTH_WS_TICKET = "/auth/ws-ticket";
     public static final String AUTH_RECUPERAR_SOLICITAR = "/auth/recuperar-clave/solicitar";
     public static final String AUTH_RECUPERAR_CONFIRMAR = "/auth/recuperar-clave/confirmar";
 
