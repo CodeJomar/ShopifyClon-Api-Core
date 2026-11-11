@@ -6,7 +6,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import shopify.api.core.modulos.usuario.dto.request.DosPasosRequest;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,6 +42,21 @@ public class CuentaControlador {
     @PutMapping("/contrasena")
     public ResponseEntity<RespuestaApi<Void>> cambiarContrasena(@Valid @RequestBody CambiarContrasenaRequest request) {
         cuentaServicio.cambiarContrasena(request);
-        return RespuestaApi.ok(null, "Contraseña actualizada");
+        return RespuestaApi.ok(null, "Contraseña actualizada. Vuelve a iniciar sesión");
+    }
+
+    @Operation(summary = "Cerrar todas mis sesiones (los tokens ya emitidos dejan de valer)")
+    @PostMapping("/cerrar-sesiones")
+    public ResponseEntity<RespuestaApi<Void>> cerrarSesiones() {
+        cuentaServicio.cerrarSesiones();
+        return RespuestaApi.ok(null, "Sesiones cerradas");
+    }
+
+    @Operation(summary = "Activar o desactivar la verificación en dos pasos (código por correo al iniciar sesión)")
+    @PutMapping("/dos-pasos")
+    public ResponseEntity<RespuestaApi<PerfilResponse>> configurarDosPasos(@Valid @RequestBody DosPasosRequest request) {
+        PerfilResponse perfil = cuentaServicio.configurarDosPasos(request);
+        return RespuestaApi.ok(perfil, perfil.dosPasosActivo()
+                ? "Verificación en dos pasos activada" : "Verificación en dos pasos desactivada");
     }
 }

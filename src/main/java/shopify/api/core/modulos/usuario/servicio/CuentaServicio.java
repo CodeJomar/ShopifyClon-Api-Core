@@ -1,7 +1,10 @@
 package shopify.api.core.modulos.usuario.servicio;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import shopify.api.core.modulos.usuario.dto.request.DosPasosRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +25,7 @@ public class CuentaServicio {
     private final UsuarioRepositorio usuarioRepositorio;
     private final PasswordEncoder passwordEncoder;
     private final UsuarioMapeador usuarioMapeador;
+    private final ContrasenasComunes contrasenasComunes;
 
     @Transactional(readOnly = true)
     public PerfilResponse perfil() {
@@ -47,8 +51,30 @@ public class CuentaServicio {
         if (passwordEncoder.matches(request.contrasenaNueva(), usuario.getContrasenaHash())) {
             throw new ReglaNegocioException("USR-010", "La nueva contraseña no puede ser igual a la actual");
         }
+        contrasenasComunes.exigirSegura(request.contrasenaNueva(), usuario.getCorreoElectronico());
         usuario.setContrasenaHash(passwordEncoder.encode(request.contrasenaNueva()));
+        // A-007: un token robado deja de servir en cuanto la víctima cambia la clave (incluye la sesión actual)
+        usuario.setSesionesValidasDesde(Instant.now().truncatedTo(ChronoUnit.MILLIS));
         usuarioRepositorio.save(usuario);
+    }
+
+    /** A-007: cierra todas las sesiones del usuario; los JWT ya emitidos responden 401 desde ahora. */
+    @Transactional
+    public void cerrarSesiones() {
+        UsuarioEntidad usuario = usuarioActual();
+        usuario.setSesionesValidasDesde(Instant.now().truncatedTo(ChronoUnit.MILLIS));
+        usuarioRepositorio.save(usuario);
+    }
+
+    /** A-007: activa o desactiva el código por correo en el login; exige la contraseña actual (USR-010). */
+    @Transactional
+    public PerfilResponse configurarDosPasos(DosPasosRequest request) {
+        UsuarioEntidad usuario = usuarioActual();
+        if (!passwordEncoder.matches(request.contrasenaActual(), usuario.getContrasenaHash())) {
+            throw new ReglaNegocioException("USR-010", "La contraseña actual no es correcta");
+        }
+        usuario.setDosPasosActivo(request.activo());
+        return usuarioMapeador.aPerfil(usuarioRepositorio.save(usuario));
     }
 
     private UsuarioEntidad usuarioActual() {

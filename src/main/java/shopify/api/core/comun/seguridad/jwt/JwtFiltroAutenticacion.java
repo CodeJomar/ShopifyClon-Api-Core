@@ -37,7 +37,9 @@ public class JwtFiltroAutenticacion extends OncePerRequestFilter {
 
         if (StringUtils.hasText(token) && jwtProveedor.esTokenValido(token)) {
             // Solo autentica si el usuario sigue existiendo y activo; si no, la ruta protegida responde 401 SEG-007
-            usuarioSesionRepositorio.buscarActivoPorId(jwtProveedor.extraerUsuarioId(token))
+            // A-007: además, el token debe ser posterior al último cambio de clave o cierre de sesiones
+            usuarioSesionRepositorio
+                    .buscarActivoPorId(jwtProveedor.extraerUsuarioId(token), jwtProveedor.extraerEmitido(token))
                     .ifPresent(usuario -> autenticar(usuario, request));
         }
 
