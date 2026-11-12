@@ -14,6 +14,13 @@ import shopify.api.core.comun.auditoria.AuditoriaEntidad;
 @Table(name = "\"PlanesSuscripcion\"")
 public class PlanSuscripcionEntidad extends AuditoriaEntidad {
 
+    /** R-001: un plan es gratuito cuando no cuesta nada ni al mes ni al año (hoy solo GRATIS). */
+    public boolean esGratuito() {
+        return precioMensual != null && precioAnual != null
+                && precioMensual.signum() == 0 && precioAnual.signum() == 0;
+    }
+
+
     @Column(name = "\"Codigo\"", nullable = false, length = 30)
     private String codigo;
 

@@ -15,5 +15,6 @@ public record PlanPlataformaResponse(
         BigDecimal porcentajeComision,
         Integer diasPrueba,
         Boolean esPublico,
+        boolean esGratuito,
         Integer orden) {
 }

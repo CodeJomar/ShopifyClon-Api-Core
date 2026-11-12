@@ -26,10 +26,11 @@ public class CuentaServicio {
     private final PasswordEncoder passwordEncoder;
     private final UsuarioMapeador usuarioMapeador;
     private final ContrasenasComunes contrasenasComunes;
+    private final AccesoServicio accesoServicio;
 
     @Transactional(readOnly = true)
     public PerfilResponse perfil() {
-        return usuarioMapeador.aPerfil(usuarioActual());
+        return perfilCompleto(usuarioActual());
     }
 
     @Transactional
@@ -38,7 +39,7 @@ public class CuentaServicio {
         usuario.setNombres(request.nombres().trim());
         usuario.setApellidos(request.apellidos().trim());
         usuario.setTelefono(request.telefono() == null || request.telefono().isBlank() ? null : request.telefono().trim());
-        return usuarioMapeador.aPerfil(usuarioRepositorio.save(usuario));
+        return perfilCompleto(usuarioRepositorio.save(usuario));
     }
 
     /** USR-010: exige la contraseña actual y que la nueva sea distinta. */
@@ -74,7 +75,11 @@ public class CuentaServicio {
             throw new ReglaNegocioException("USR-010", "La contraseña actual no es correcta");
         }
         usuario.setDosPasosActivo(request.activo());
-        return usuarioMapeador.aPerfil(usuarioRepositorio.save(usuario));
+        return perfilCompleto(usuarioRepositorio.save(usuario));
+    }
+
+    private PerfilResponse perfilCompleto(UsuarioEntidad usuario) {
+        return usuarioMapeador.aPerfil(usuario).conAcceso(accesoServicio.de(usuario));
     }
 
     private UsuarioEntidad usuarioActual() {

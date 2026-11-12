@@ -57,7 +57,8 @@ public class AltaTiendaServicio {
         }
 
         // Se consulta antes de insertar la tienda para no contar la que se está creando (SUS-016)
-        boolean pendienteDePago = pruebaUnaPorUsuario && suscripcionServicio.propietarioYaUsoPrueba(propietarioId);
+        boolean gratuita = suscripcionServicio.esPlanGratuito(request.codigoPlan());
+        boolean pendienteDePago = !gratuita && pruebaUnaPorUsuario && suscripcionServicio.propietarioYaUsoPrueba(propietarioId);
 
         TiendaEntidad tienda = new TiendaEntidad();
         tienda.setPropietarioId(propietarioId);
@@ -82,7 +83,9 @@ public class AltaTiendaServicio {
 
         balanceServicio.crearSiNoExiste(tienda.getId());
 
-        SuscripcionVigente suscripcion = pendienteDePago
+        SuscripcionVigente suscripcion = gratuita
+                ? suscripcionServicio.crearGratuita(tienda.getId(), propietarioId, request.codigoPlan())
+                : pendienteDePago
                 ? suscripcionServicio.crearPendienteDePago(tienda.getId(), request.codigoPlan())
                 : suscripcionServicio.crearPrueba(tienda.getId(), request.codigoPlan());
 

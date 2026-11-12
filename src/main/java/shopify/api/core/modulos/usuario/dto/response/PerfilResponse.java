@@ -11,5 +11,12 @@ public record PerfilResponse(
         String telefono,
         boolean esAdministradorPlataforma,
         boolean dosPasosActivo,
-        Instant fechaCreacion) {
+        Instant fechaCreacion,
+        /** R-001: qué es la persona (comprador, propietario, administrador) y qué puede hacer en cada tienda. */
+        AccesoResponse acceso) {
+
+    public PerfilResponse conAcceso(AccesoResponse nuevoAcceso) {
+        return new PerfilResponse(id, correoElectronico, nombres, apellidos, telefono, esAdministradorPlataforma,
+                dosPasosActivo, fechaCreacion, nuevoAcceso);
+    }
 }

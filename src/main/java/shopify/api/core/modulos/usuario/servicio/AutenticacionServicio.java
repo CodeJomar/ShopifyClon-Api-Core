@@ -50,6 +50,7 @@ public class AutenticacionServicio {
     private final PublicadorEvento publicadorEvento;
     private final JwtProveedor jwtProveedor;
     private final UsuarioMapeador usuarioMapeador;
+    private final AccesoServicio accesoServicio;
     private final Clock reloj;
 
     /** Hash que se compara cuando el correo no existe, para que el tiempo de respuesta sea parecido (USR-004). */
@@ -186,7 +187,7 @@ public class AutenticacionServicio {
         return LoginResponse.sesion(
                 token,
                 jwtProveedor.calcularExpiracion(emitido),
-                usuarioMapeador.aPerfil(usuario),
+                usuarioMapeador.aPerfil(usuario).conAcceso(accesoServicio.de(usuario)),
                 usuarioMapeador.aTiendas(usuarioRepositorio.listarTiendasDeUsuario(usuario.getId())));
     }
 

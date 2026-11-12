@@ -47,6 +47,18 @@ public class TiendaEntidad extends AuditoriaEntidad {
     @Column(name = "\"ZonaHoraria\"", nullable = false, length = 50)
     private String zonaHoraria = "America/Lima";
 
+    /** R-001: texto corto para la ficha pública de la tienda en el mercado. */
+    @Column(name = "\"Descripcion\"", length = 500)
+    private String descripcion;
+
+    /** R-001: logo (https). */
+    @Column(name = "\"UrlLogo\"", length = 2000)
+    private String urlLogo;
+
+    /** R-001: si es false la tienda no aparece en el mercado (su vitrina propia sigue funcionando). */
+    @Column(name = "\"VisibleEnMercado\"", nullable = false)
+    private Boolean visibleEnMercado = true;
+
     /** Solo el checkout lo cambia, con un UPDATE relativo (TIE-007); por eso no es actualizable desde JPA. */
     @Column(name = "\"SiguienteNumeroOrden\"", nullable = false, insertable = true, updatable = false)
     private Integer siguienteNumeroOrden = PRIMER_NUMERO_ORDEN;

@@ -88,6 +88,12 @@ public class TiendaServicio {
         tienda.setTasaImpuesto(request.tasaImpuesto());
         tienda.setPreciosIncluyenImpuesto(request.preciosIncluyenImpuesto());
         tienda.setZonaHoraria(request.zonaHoraria().trim());
+        // R-001: ficha pública. La descripción y el logo vacíos los borran; el interruptor ausente no cambia
+        tienda.setDescripcion(request.descripcion() == null || request.descripcion().isBlank() ? null : request.descripcion().trim());
+        tienda.setUrlLogo(request.urlLogo() == null || request.urlLogo().isBlank() ? null : request.urlLogo().trim());
+        if (request.visibleEnMercado() != null) {
+            tienda.setVisibleEnMercado(request.visibleEnMercado());
+        }
         return aConfiguracion(tiendaRepositorio.saveAndFlush(tienda));
     }
 

@@ -38,5 +38,12 @@ public record ActualizarTiendaRequest(
 
         @NotBlank(message = "La zona horaria es obligatoria")
         @Size(max = 50, message = "La zona horaria no puede superar los 50 caracteres")
-        String zonaHoraria) {
+        String zonaHoraria,
+        @Size(max = 500, message = "La descripción no puede superar los 500 caracteres")
+        String descripcion,
+        @Size(max = 2000, message = "La URL del logo no puede superar los 2000 caracteres")
+        @Pattern(regexp = "^$|^https://\\S+$", message = "La URL del logo debe comenzar con https://")
+        String urlLogo,
+        /** Ausente conserva el valor actual. */
+        Boolean visibleEnMercado) {
 }

@@ -17,17 +17,19 @@ class PlanTest extends PruebaSuscripcionBase {
     }
 
     @Test
-    void listaLosTresPlanesEnOrdenSinDatosInternos() throws Exception {
+    void listaLosCuatroPlanesEnOrdenSinDatosInternos() throws Exception {
         JsonNode planes = planesPublicos();
 
-        assertThat(planes).hasSize(3);
-        assertThat(planes.get(0).get("codigo").asText()).isEqualTo("BASICO");
-        assertThat(planes.get(1).get("codigo").asText()).isEqualTo("ESTANDAR");
-        assertThat(planes.get(2).get("codigo").asText()).isEqualTo("AVANZADO");
+        assertThat(planes).hasSize(4);
+        assertThat(planes.get(0).get("codigo").asText()).isEqualTo("GRATIS");
+        assertThat(planes.get(0).get("es_gratuito").asBoolean()).isTrue();
+        assertThat(planes.get(1).get("codigo").asText()).isEqualTo("BASICO");
+        assertThat(planes.get(2).get("codigo").asText()).isEqualTo("ESTANDAR");
+        assertThat(planes.get(3).get("codigo").asText()).isEqualTo("AVANZADO");
 
         // AVANZADO es ilimitado: el nulo se omite del JSON
-        assertThat(planes.get(2).has("limite_productos")).isFalse();
-        assertThat(new BigDecimal(planes.get(0).get("porcentaje_comision").asText())).isEqualByComparingTo("0.02");
+        assertThat(planes.get(3).has("limite_productos")).isFalse();
+        assertThat(new BigDecimal(planes.get(1).get("porcentaje_comision").asText())).isEqualByComparingTo("0.02");
 
         for (JsonNode plan : planes) {
             assertThat(plan.has("id")).isFalse();
@@ -46,6 +48,6 @@ class PlanTest extends PruebaSuscripcionBase {
         List<String> codigos = new ArrayList<>();
         planesPublicos().forEach(plan -> codigos.add(plan.get("codigo").asText()));
 
-        assertThat(codigos).containsExactly("BASICO", "ESTANDAR", "AVANZADO");
+        assertThat(codigos).containsExactly("GRATIS", "BASICO", "ESTANDAR", "AVANZADO");
     }
 }

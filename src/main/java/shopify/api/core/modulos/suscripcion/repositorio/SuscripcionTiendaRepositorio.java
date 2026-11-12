@@ -53,6 +53,22 @@ public interface SuscripcionTiendaRepositorio extends JpaRepository<SuscripcionT
             """, nativeQuery = true)
     boolean propietarioYaUsoPrueba(@Param("propietarioId") UUID propietarioId);
 
+    /**
+     * R-001 (SUS-018): ¿el propietario ya tiene una tienda gratuita en uso? Cuenta las tiendas y suscripciones
+     * no eliminadas y no canceladas; una tienda gratuita cancelada o eliminada libera el cupo.
+     */
+    @Query(value = """
+            SELECT EXISTS (
+              SELECT 1 FROM \"SuscripcionesTienda\" s
+              JOIN \"Tiendas\" t ON t.\"Id\" = s.\"TiendaId\"
+              JOIN \"PlanesSuscripcion\" p ON p.\"Id\" = s.\"PlanId\"
+              WHERE t.\"PropietarioId\" = :propietarioId AND t.\"Eliminado\" = FALSE
+                AND s.\"Eliminado\" = FALSE AND s.\"Estado\" <> 'CANCELADA'
+                AND p.\"PrecioMensual\" = 0 AND p.\"PrecioAnual\" = 0
+            )
+            """, nativeQuery = true)
+    boolean propietarioTieneTiendaGratuita(@Param("propietarioId") UUID propietarioId);
+
     /** Productos no eliminados de la tienda (uso frente a SUS-008 y SUS-011). */
     @Query(value = "SELECT count(*) FROM \"Productos\" WHERE \"TiendaId\" = :tiendaId AND \"Eliminado\" = FALSE",
             nativeQuery = true)

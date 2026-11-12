@@ -66,6 +66,43 @@ public class SuscripcionServicio {
         return aVigente(suscripciones.save(suscripcion), plan);
     }
 
+    /** Instante de «sin vencimiento» del plan gratuito: la fecha de fin de período nunca llega. */
+    static final Instant SIN_VENCIMIENTO = Instant.parse("9999-12-31T00:00:00Z");
+
+    /** ¿El código corresponde a un plan público gratuito? (sin plan o plan inexistente: no). */
+    @Transactional(readOnly = true)
+    public boolean esPlanGratuito(String codigoPlan) {
+        if (codigoPlan == null || codigoPlan.isBlank()) {
+            return false;
+        }
+        return planes.findByCodigoAndEliminadoFalse(codigoPlan.strip().toUpperCase(Locale.ROOT))
+                .filter(p -> Boolean.TRUE.equals(p.getEsPublico()))
+                .map(PlanSuscripcionEntidad::esGratuito)
+                .orElse(false);
+    }
+
+    /**
+     * Crea la suscripción de una tienda con plan gratuito (R-001): nace {@code ACTIVA}, sin cobro, sin prueba y sin
+     * vencimiento. Una persona solo puede tener una tienda gratuita (SUS-018).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public SuscripcionVigente crearGratuita(UUID tiendaId, UUID propietarioId, String codigoPlan) {
+        PlanSuscripcionEntidad plan = planPublico(codigoPlan, false);
+        if (!plan.esGratuito()) {
+            throw new ReglaNegocioException("SUS-015", "El plan elegido no está disponible");
+        }
+        if (suscripciones.propietarioTieneTiendaGratuita(propietarioId)) {
+            throw new ConflictoEstadoException("SUS-018",
+                    "Ya tienes una tienda gratuita. Elige un plan de pago para crear otra tienda");
+        }
+        exigirSinSuscripcion(tiendaId);
+
+        Instant ahora = reloj.instant();
+        SuscripcionTiendaEntidad suscripcion = nuevaSuscripcion(tiendaId, plan, EstadoSuscripcion.ACTIVA, ahora);
+        suscripcion.setFinPeriodoActual(SIN_VENCIMIENTO);
+        return aVigente(suscripciones.save(suscripcion), plan);
+    }
+
     @Transactional(readOnly = true)
     public boolean propietarioYaUsoPrueba(UUID propietarioId) {
         return suscripciones.propietarioYaUsoPrueba(propietarioId);

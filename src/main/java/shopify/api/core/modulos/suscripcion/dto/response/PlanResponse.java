@@ -13,5 +13,7 @@ public record PlanResponse(
         Integer limiteProductos,
         Integer limitePersonal,
         BigDecimal porcentajeComision,
-        Integer diasPrueba) {
+        Integer diasPrueba,
+        /** R-001: sin costo y sin vencimiento; solo se elige al crear la tienda (una por persona). */
+        boolean esGratuito) {
 }

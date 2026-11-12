@@ -62,6 +62,7 @@ public class SuscripcionPanelServicio {
     /** Sin suscripción vigente, o con el plan pedido: se cobra el período (SUS-004). */
     public SuscripcionPanelResponse pagar(ContextoTienda contexto, PagarSuscripcionRequest request) {
         PlanSuscripcionEntidad plan = planParaPagar(contexto.tiendaId(), request.codigoPlan());
+        exigirDePago(plan);
         cobros.cobrar(contexto.tiendaId(), plan, request.ciclo(), request.tokenPago(), OperacionCobro.PAGO);
         return ver(contexto);
     }
@@ -70,6 +71,7 @@ public class SuscripcionPanelServicio {
     public SuscripcionPanelResponse cambiarPlan(ContextoTienda contexto, CambiarPlanSuscripcionRequest request) {
         UUID tiendaId = contexto.tiendaId();
         PlanSuscripcionEntidad plan = planPublico(request.codigoPlan());
+        exigirDePago(plan);
         SuscripcionTiendaEntidad suscripcion = vigente(tiendaId);
 
         if (plan.getId().equals(suscripcion.getPlanId()) && suscripcion.getCicloFacturacion() == request.ciclo()) {
@@ -94,7 +96,9 @@ public class SuscripcionPanelServicio {
             EstadoSuscripcion antes = suscripcion.getEstado();
             Instant ahora = reloj.instant();
 
-            if (antes == EstadoSuscripcion.PRUEBA) {
+            // R-001: el plan gratuito no tiene período que esperar: se cancela al momento, como la prueba
+            boolean gratuita = planPorId(suscripcion.getPlanId()).esGratuito();
+            if (antes == EstadoSuscripcion.PRUEBA || (antes == EstadoSuscripcion.ACTIVA && gratuita)) {
                 suscripcion.setEstado(EstadoSuscripcion.CANCELADA);
                 suscripcion.setFechaCancelacion(ahora);
                 suscripcion.setMotivoEstado(motivoLimpio);
@@ -163,6 +167,13 @@ public class SuscripcionPanelServicio {
                     .orElseGet(() -> planPublico(SuscripcionServicio.CODIGO_PLAN_POR_DEFECTO));
         }
         return planPublico(codigoPlan);
+    }
+
+    /** R-001 (SUS-019): el plan gratuito solo se elige al crear la tienda; no se paga ni se baja a él después. */
+    private static void exigirDePago(PlanSuscripcionEntidad plan) {
+        if (plan.esGratuito()) {
+            throw new ConflictoEstadoException("SUS-019", "El plan gratuito solo se elige al crear la tienda");
+        }
     }
 
     /** Solo los planes públicos se pueden elegir (SUS-015). */
