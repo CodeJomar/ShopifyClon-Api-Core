@@ -127,4 +127,8 @@ public class OrdenEntidad extends AuditoriaEntidad {
 
     @Column(name = "\"FechaCierre\"")
     private Instant fechaCierre;
+
+    /** Pedido padre (R-001); siempre se asigna al crear, nulo solo en datos de pruebas antiguas. */
+    @Column(name = "\"PedidoId\"")
+    private UUID pedidoId;
 }

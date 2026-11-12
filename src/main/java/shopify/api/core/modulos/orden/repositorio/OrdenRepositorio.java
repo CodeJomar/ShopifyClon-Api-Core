@@ -1,6 +1,8 @@
 package shopify.api.core.modulos.orden.repositorio;
 
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -22,6 +24,11 @@ public interface OrdenRepositorio extends JpaRepository<OrdenEntidad, UUID> {
     Optional<OrdenEntidad> findFirstByIdAndEliminadoFalse(UUID id);
 
     boolean existsByTokenAccesoAndEliminadoFalse(String tokenAcceso);
+
+    /** Órdenes hijas de un pedido, en el orden en que se crearon. */
+    List<OrdenEntidad> findByPedidoIdAndEliminadoFalseOrderByFechaCreacionAscIdAsc(UUID pedidoId);
+
+    List<OrdenEntidad> findByPedidoIdInAndEliminadoFalseOrderByFechaCreacionAscIdAsc(Collection<UUID> pedidoIds);
 
     /** Bloqueo de la orden para una transición de estado (FOR UPDATE; se libera al commit). */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

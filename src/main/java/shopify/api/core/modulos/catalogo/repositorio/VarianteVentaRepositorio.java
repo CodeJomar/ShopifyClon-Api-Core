@@ -29,4 +29,12 @@ public interface VarianteVentaRepositorio extends JpaRepository<VarianteProducto
             """, nativeQuery = true)
     List<VarianteVentaVista> buscarParaVenta(@Param("tiendaId") UUID tiendaId,
                                              @Param("varianteIds") Collection<UUID> varianteIds);
+
+    /** Tienda dueña de una variante (carrito global); vacío si la variante no existe. */
+    @Query(value = """
+            SELECT p."TiendaId" FROM "VariantesProducto" v
+            JOIN "Productos" p ON p."Id" = v."ProductoId"
+            WHERE v."Id" = :varianteId
+            """, nativeQuery = true)
+    List<UUID> tiendaDeVariante(@Param("varianteId") UUID varianteId);
 }

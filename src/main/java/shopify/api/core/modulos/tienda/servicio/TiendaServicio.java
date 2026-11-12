@@ -27,6 +27,7 @@ import shopify.api.core.modulos.tienda.dto.response.TiendaConfiguracionResponse;
 import shopify.api.core.modulos.tienda.dto.response.TiendaVitrinaResponse;
 import shopify.api.core.modulos.tienda.entidad.TiendaEntidad;
 import shopify.api.core.modulos.tienda.modelo.ConfiguracionVenta;
+import shopify.api.core.modulos.tienda.modelo.TiendaPublica;
 import shopify.api.core.modulos.tienda.mapeador.TiendaMapeador;
 import shopify.api.core.modulos.tienda.repositorio.TiendaRepositorio;
 
@@ -155,6 +156,24 @@ public class TiendaServicio {
         return tiendaRepositorio.findBySubdominioAndEliminadoFalse(clave)
                 .filter(tienda -> Boolean.TRUE.equals(tienda.getEstaActiva()) && suscripcionOperativa(tienda.getId()))
                 .map(TiendaEntidad::getId);
+    }
+
+    /** Datos públicos de la tienda si es operativa (TIE-004); vacío si no existe o no lo es. */
+    @Transactional(readOnly = true)
+    public Optional<TiendaPublica> publicaOperativa(UUID tiendaId) {
+        return tiendaRepositorio.findByIdAndEliminadoFalse(tiendaId)
+                .filter(tienda -> Boolean.TRUE.equals(tienda.getEstaActiva()) && suscripcionOperativa(tienda.getId()))
+                .map(TiendaServicio::aPublica);
+    }
+
+    /** Datos públicos de la tienda aunque ya no sea operativa (historial de pedidos); vacío si no existe. */
+    @Transactional(readOnly = true)
+    public Optional<TiendaPublica> publica(UUID tiendaId) {
+        return tiendaRepositorio.findByIdAndEliminadoFalse(tiendaId).map(TiendaServicio::aPublica);
+    }
+
+    private static TiendaPublica aPublica(TiendaEntidad tienda) {
+        return new TiendaPublica(tienda.getId(), tienda.getNombre(), tienda.getSubdominio(), tienda.getMoneda());
     }
 
     private TiendaConfiguracionResponse cambiarEstado(ContextoTienda contexto, boolean activa, String motivo,

@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import shopify.api.core.comun.excepcion.ConflictoEstadoException;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
@@ -46,7 +48,9 @@ import shopify.api.core.modulos.orden.modelo.NuevaOrden;
 import shopify.api.core.modulos.orden.modelo.OrdenCreada;
 import shopify.api.core.modulos.orden.modelo.OrdenResumen;
 import shopify.api.core.modulos.orden.modelo.PasarelaPago;
+import shopify.api.core.modulos.orden.modelo.NuevoPedido;
 import shopify.api.core.modulos.orden.servicio.OrdenServicio;
+import shopify.api.core.modulos.orden.servicio.PedidoServicio;
 import shopify.api.core.modulos.tienda.modelo.ConfiguracionVenta;
 import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
 import shopify.api.core.modulos.totales.modelo.DescuentoCalculo;
@@ -74,6 +78,7 @@ public class CheckoutServicio {
     private final CarritoCalculoServicio calculoCarrito;
     private final InventarioServicio inventario;
     private final OrdenServicio ordenes;
+    private final PedidoServicio pedidos;
     private final GeneradorToken generadorToken;
     private final ApplicationEventPublisher eventos;
     private final TransactionTemplate transaccion;
@@ -116,6 +121,34 @@ public class CheckoutServicio {
             return repeticionConcurrente(tiendaId, carrito, clave);
         }
 
+        DatosTienda datos = new DatosTienda(solicitud.correoCliente(), solicitud.nombreCliente(),
+                solicitud.telefonoCliente(), solicitud.direccionEnvio(), solicitud.direccionFacturacion(),
+                solicitud.tarifaEnvioId(), solicitud.pasarela());
+        OrdenResumen orden = armarOrden(tiendaId, carrito, clave, datos, solicitud.totalEsperado());
+
+        // R-001: la compra de una sola tienda también es un pedido, de una orden hija
+        ConfiguracionVenta configuracion = tiendas.configuracionVenta(tiendaId);
+        pedidos.crear(new NuevoPedido(SesionActual.usuarioIdOpcional().orElse(null), solicitud.correoCliente(),
+                solicitud.nombreCliente(), solicitud.telefonoCliente(), configuracion.moneda(), orden.subtotal(),
+                orden.descuentoTotal(), orden.costoEnvio(), orden.impuestosTotal(), orden.total(), orden.pasarela(),
+                null, generadorToken.tokenUrl(), orden.fechaExpiracionPago()), List.of(orden.id()));
+        return new ResultadoCheckout(respuesta(orden, configuracion.moneda()), true);
+    }
+
+    /** Datos del comprador y del envío de una tienda; el checkout global arma uno por tienda del carrito. */
+    public record DatosTienda(String correoCliente, String nombreCliente, String telefonoCliente,
+                              DireccionCheckoutRequest direccionEnvio, DireccionCheckoutRequest direccionFacturacion,
+                              UUID tarifaEnvioId, PasarelaPago pasarela) {
+    }
+
+    /**
+     * Pasos 4 a 12 de una tienda con su carrito ya bloqueado y vigente: valida, calcula, crea la orden, reserva el
+     * stock y convierte el carrito. {@code totalEsperado} nulo omite la comparación CHK-004 (el checkout global
+     * compara el total general). Requiere la transacción de quien llama.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public OrdenResumen armarOrden(UUID tiendaId, CarritoParaCheckout carrito, UUID clave, DatosTienda datos,
+                                   BigDecimal totalEsperado) {
         // Paso 4: solo líneas vendibles, con precios actuales (CHK-002 si no queda ninguna)
         if (carrito.lineas().isEmpty()) {
             throw new ConflictoEstadoException("CHK-002", "No hay productos disponibles para comprar");
@@ -144,17 +177,17 @@ public class CheckoutServicio {
         // Paso 5: con envío, dirección obligatoria (VAL-001) y tarifa activa de la tienda (ENV-001)
         TarifaAplicable tarifa = null;
         if (requiereEnvio) {
-            if (solicitud.direccionEnvio() == null) {
+            if (datos.direccionEnvio() == null) {
                 throw new ReglaNegocioException("VAL-001", "Indica la dirección de envío");
             }
             // ENV-007: el punto de entrega marcado en el mapa es obligatorio cuando hay que enviar
-            if (solicitud.direccionEnvio().latitud() == null || solicitud.direccionEnvio().longitud() == null) {
+            if (datos.direccionEnvio().latitud() == null || datos.direccionEnvio().longitud() == null) {
                 throw new ReglaNegocioException("ENV-007", "Marca en el mapa el punto de entrega");
             }
-            if (solicitud.tarifaEnvioId() == null) {
+            if (datos.tarifaEnvioId() == null) {
                 throw new ConflictoEstadoException("ENV-001", "Elige un método de envío");
             }
-            tarifa = tarifas.buscarActiva(tiendaId, solicitud.tarifaEnvioId());
+            tarifa = tarifas.buscarActiva(tiendaId, datos.tarifaEnvioId());
         }
 
         // Paso 6: el cupón del carrito debe seguir aplicando (CHK-005)
@@ -179,7 +212,7 @@ public class CheckoutServicio {
         boolean incluido = Boolean.TRUE.equals(configuracion.preciosIncluyenImpuesto());
         // Misma función que usa la cotización del carrito (A-003): el total estimado es el que se compara aquí
         TotalesCalculados totales = calculoCarrito.calcularTotales(lineasCalculo, descuento, tarifa, configuracion);
-        if (solicitud.totalEsperado().compareTo(totales.total()) != 0) {
+        if (totalEsperado != null && totalEsperado.compareTo(totales.total()) != 0) {
             throw new ConflictoEstadoException("CHK-004", "El total cambió desde que lo viste. Revísalo antes de confirmar",
                     Map.of("total_recalculado", totales.total()));
         }
@@ -190,15 +223,15 @@ public class CheckoutServicio {
         // Paso 9: la orden y sus líneas, con instantáneas. Nace ABIERTA / PENDIENTE / NO_PREPARADO.
         String tokenAcceso = generadorToken.tokenUrl();
         Instant expiracion = reloj.instant().plus(
-                solicitud.pasarela() == PasarelaPago.STRIPE ? PLAZO_PAGO_STRIPE : PLAZO_PAGO_MANUAL);
+                datos.pasarela() == PasarelaPago.STRIPE ? PLAZO_PAGO_STRIPE : PLAZO_PAGO_MANUAL);
         OrdenCreada creada = ordenes.crear(new NuevaOrden(tiendaId, SesionActual.usuarioIdOpcional().orElse(null),
-                numeroOrden, solicitud.correoCliente(), solicitud.nombreCliente(), solicitud.telefonoCliente(),
+                numeroOrden, datos.correoCliente(), datos.nombreCliente(), datos.telefonoCliente(),
                 totales.subtotal(), totales.descuentoTotal(), totales.costoEnvio(), totales.impuestosTotal(),
-                totales.total(), cuponId, codigoCupon, tarifa == null ? null : tarifa.nombre(), solicitud.pasarela(),
+                totales.total(), cuponId, codigoCupon, tarifa == null ? null : tarifa.nombre(), datos.pasarela(),
                 configuracion.tasaImpuesto(), incluido, clave, tokenAcceso, expiracion,
-                direccion(solicitud.direccionEnvio()),
-                direccion(solicitud.direccionFacturacion() != null
-                        ? solicitud.direccionFacturacion() : solicitud.direccionEnvio()),
+                direccion(datos.direccionEnvio()),
+                direccion(datos.direccionFacturacion() != null
+                        ? datos.direccionFacturacion() : datos.direccionEnvio()),
                 lineas));
 
         // Paso 10: reservar stock con el id de la orden (INV-002, todo o nada). Es la primera lectura de stock.
@@ -214,9 +247,8 @@ public class CheckoutServicio {
         carritos.marcarConvertido(carrito.carritoId(), creada.id());
         eventos.publishEvent(new OrdenCreadaEvento(tiendaId, creada.id(), numeroOrden));
 
-        OrdenResumen orden = ordenes.buscarPorClave(tiendaId, clave)
+        return ordenes.buscarPorClave(tiendaId, clave)
                 .orElseThrow(() -> new IllegalStateException("La orden recién creada debía existir"));
-        return new ResultadoCheckout(respuesta(orden, configuracion.moneda()), true);
     }
 
     /**

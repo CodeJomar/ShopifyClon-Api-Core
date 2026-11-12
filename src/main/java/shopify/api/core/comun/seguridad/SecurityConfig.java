@@ -58,9 +58,12 @@ public class SecurityConfig {
                         // Ticket efímero WebSocket: requiere sesión JWT aunque viva bajo /auth/**
                         .requestMatchers(HttpMethod.POST, "/auth/ws-ticket").authenticated()
                         // Rutas públicas
-                        .requestMatchers("/auth/**", "/vitrina/**", "/webhooks/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/carrito/vincular").authenticated()
+                        .requestMatchers("/auth/**", "/vitrina/**", "/webhooks/**", "/carrito", "/carrito/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/planes", "/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/mercado/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/pedidos/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/pedidos/*/pagar", "/checkout").permitAll()
                         .requestMatchers(HttpMethod.GET, "/seguimiento/*").permitAll()
                         // Handshake HTTP de WebSocket STOMP (la autenticación JWT/ticket se valida en el CONNECT STOMP)
                         .requestMatchers(HttpMethod.GET, "/ws", "/ws/**").permitAll()

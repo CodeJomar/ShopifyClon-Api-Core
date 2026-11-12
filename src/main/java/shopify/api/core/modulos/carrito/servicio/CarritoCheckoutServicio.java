@@ -32,6 +32,14 @@ public class CarritoCheckoutServicio {
         return Optional.ofNullable(buscar(tiendaId, token).getOrdenId());
     }
 
+    /** Checkout global: las órdenes que ya tienen los carritos de ese token (para reconocer una repetición). */
+    @Transactional(readOnly = true)
+    public java.util.Set<UUID> ordenesDelToken(String token) {
+        return carritos.findByTokenSesionAndEliminadoFalse(token == null ? "" : token).stream()
+                .map(CarritoEntidad::getOrdenId).filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
     /**
      * Paso 3 del checkout: bloquea el carrito (FOR UPDATE) y lo devuelve con sus líneas. No decide el estado: eso lo
      * hace quien llama. Requiere transacción abierta, porque el bloqueo dura hasta su commit.

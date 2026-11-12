@@ -3,6 +3,7 @@ package shopify.api.core.modulos.catalogo.servicio;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,5 +36,11 @@ public class CatalogoVentaServicio {
                     Boolean.TRUE.equals(fila.getVendible())));
         }
         return resultado;
+    }
+
+    /** Tienda dueña de la variante, para el carrito global; vacío si no existe. */
+    @Transactional(readOnly = true)
+    public Optional<UUID> tiendaDeVariante(UUID varianteId) {
+        return variantes.tiendaDeVariante(varianteId).stream().findFirst();
     }
 }

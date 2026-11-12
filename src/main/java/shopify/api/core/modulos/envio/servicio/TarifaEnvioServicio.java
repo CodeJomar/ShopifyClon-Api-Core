@@ -69,6 +69,13 @@ public class TarifaEnvioServicio {
                 repositorio.findByTiendaIdAndEstaActivaTrueAndEliminadoFalseOrderByOrdenAscNombreAsc(tiendaId));
     }
 
+    /** Carrito global: tarifas activas de una tienda ya validada como operativa. */
+    @Transactional(readOnly = true)
+    public List<TarifaVitrinaResponse> listarActivas(UUID tiendaId) {
+        return mapeador.aVitrinas(
+                repositorio.findByTiendaIdAndEstaActivaTrueAndEliminadoFalseOrderByOrdenAscNombreAsc(tiendaId));
+    }
+
     /** Para el checkout: la tarifa debe existir, estar activa y ser de la tienda; si no, ENV-001. */
     @Transactional(readOnly = true)
     public TarifaAplicable buscarActiva(UUID tiendaId, UUID tarifaId) {

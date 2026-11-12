@@ -78,6 +78,13 @@ public class CarritoServicio {
     public CarritoResponse agregar(String subdominio, String token, UUID varianteId, int cantidad) {
         UUID tiendaId = tienda(subdominio);
         CarritoEntidad carrito = buscarActivo(tiendaId, token);
+        agregarEn(tiendaId, carrito, varianteId, cantidad);
+        return calculo.construir(tiendaId, carrito, lineas(carrito), List.of());
+    }
+
+    /** Suma la cantidad a una línea del carrito dado (también la usa el carrito global). */
+    @Transactional
+    public void agregarEn(UUID tiendaId, CarritoEntidad carrito, UUID varianteId, int cantidad) {
         ItemCarritoEntidad existente = itemDe(carrito, varianteId);
         if (existente != null) {
             int nueva = existente.getCantidad() + cantidad;
@@ -89,7 +96,6 @@ public class CarritoServicio {
         } else {
             nuevaLinea(tiendaId, carrito, varianteId, cantidad);
         }
-        return calculo.construir(tiendaId, carrito, lineas(carrito), List.of());
     }
 
     /** Cantidad 0 quita la línea; si no existía, se agrega (con las mismas reglas que {@link #agregar}). */
@@ -97,6 +103,12 @@ public class CarritoServicio {
     public CarritoResponse fijarCantidad(String subdominio, String token, UUID varianteId, int cantidad) {
         UUID tiendaId = tienda(subdominio);
         CarritoEntidad carrito = buscarActivo(tiendaId, token);
+        fijarCantidadEn(tiendaId, carrito, varianteId, cantidad);
+        return calculo.construir(tiendaId, carrito, lineas(carrito), List.of());
+    }
+
+    @Transactional
+    public void fijarCantidadEn(UUID tiendaId, CarritoEntidad carrito, UUID varianteId, int cantidad) {
         ItemCarritoEntidad existente = itemDe(carrito, varianteId);
         if (cantidad == 0) {
             if (existente != null) {
@@ -109,19 +121,32 @@ public class CarritoServicio {
         } else {
             nuevaLinea(tiendaId, carrito, varianteId, cantidad);
         }
-        return calculo.construir(tiendaId, carrito, lineas(carrito), List.of());
     }
 
     @Transactional
     public CarritoResponse quitar(String subdominio, String token, UUID varianteId) {
         UUID tiendaId = tienda(subdominio);
         CarritoEntidad carrito = buscarActivo(tiendaId, token);
-        ItemCarritoEntidad existente = itemDe(carrito, varianteId);
-        if (existente != null) {
-            existente.setEliminado(true);
-            items.saveAndFlush(existente);
-        }
+        fijarCantidadEn(tiendaId, carrito, varianteId, 0);
         return calculo.construir(tiendaId, carrito, lineas(carrito), List.of());
+    }
+
+    /** Aplica o quita (código nulo) el cupón del carrito dado; CUP-003 si no aplica. */
+    @Transactional
+    public void fijarCuponEn(UUID tiendaId, CarritoEntidad carrito, String codigo) {
+        if (codigo == null) {
+            carrito.setCuponId(null);
+        } else {
+            CarritoResponse actual = calculo.construir(tiendaId, carrito, lineas(carrito), List.of());
+            carrito.setCuponId(cupones.evaluar(tiendaId, codigo, actual.subtotal()).id());
+        }
+        carritos.saveAndFlush(carrito);
+    }
+
+    /** Líneas del carrito dado (carrito global). */
+    @Transactional(readOnly = true)
+    public List<ItemCarritoEntidad> lineasDe(CarritoEntidad carrito) {
+        return lineas(carrito);
     }
 
     /** CUP-005: reemplaza el cupón anterior. Si no aplica, responde 422 CUP-003 con el motivo y no se asocia. */
@@ -150,8 +175,12 @@ public class CarritoServicio {
      * token se fusiona en el suyo y queda CONVERTIDO. Una carrera con UxCarritoActivoUsuario reintenta como fusión.
      */
     public CarritoResponse vincular(String subdominio, String token) {
+        return vincularTienda(tienda(subdominio), token);
+    }
+
+    /** Vincula el carrito del token en una tienda (también lo usa el carrito global, tienda por tienda). */
+    public CarritoResponse vincularTienda(UUID tiendaId, String token) {
         UUID usuarioId = SesionActual.usuarioId();
-        UUID tiendaId = tienda(subdominio);
         for (int intento = 1; ; intento++) {
             try {
                 return transaccion.execute(estado -> vincularEnTransaccion(tiendaId, token, usuarioId));

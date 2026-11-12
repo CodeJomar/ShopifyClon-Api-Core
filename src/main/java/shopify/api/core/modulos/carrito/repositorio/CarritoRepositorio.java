@@ -1,6 +1,7 @@
 package shopify.api.core.modulos.carrito.repositorio;
 
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,17 @@ public interface CarritoRepositorio extends JpaRepository<CarritoEntidad, UUID> 
 
     /** Token siempre acotado a la tienda: un token de otra tienda no existe (CAR-404). */
     Optional<CarritoEntidad> findFirstByTokenSesionAndTiendaIdAndEliminadoFalse(String tokenSesion, UUID tiendaId);
+
+    /** Todos los carritos de un token, de cualquier estado (reconocer una compra ya hecha). */
+    List<CarritoEntidad> findByTokenSesionAndEliminadoFalse(String tokenSesion);
+
+    /** Carrito global: los carritos de un token, uno por tienda. */
+    List<CarritoEntidad> findByTokenSesionAndEstadoAndEliminadoFalseOrderByFechaCreacionAsc(String tokenSesion,
+                                                                                            EstadoCarrito estado);
+
+    /** Carrito global con sesión: los carritos activos de la persona, uno por tienda. */
+    List<CarritoEntidad> findByUsuarioIdAndEstadoAndEliminadoFalseOrderByFechaCreacionAsc(UUID usuarioId,
+                                                                                          EstadoCarrito estado);
 
     /** Un solo ACTIVO por usuario y tienda (UxCarritoActivoUsuario). */
     Optional<CarritoEntidad> findFirstByTiendaIdAndUsuarioIdAndEstadoAndEliminadoFalse(UUID tiendaId, UUID usuarioId,
