@@ -114,6 +114,12 @@ public class OrdenServicio {
         return ordenes.findFirstByIdAndEliminadoFalse(ordenId).map(OrdenEntidad::getTiendaId);
     }
 
+    /** Pedido padre de la orden; vacío si no existe o es un dato antiguo sin pedido. */
+    @Transactional(readOnly = true)
+    public Optional<UUID> pedidoDeOrden(UUID ordenId) {
+        return ordenes.findFirstByIdAndEliminadoFalse(ordenId).map(OrdenEntidad::getPedidoId);
+    }
+
     private OrdenEstado estadoDe(OrdenEntidad orden) {
         List<LineaOrden> lineas = lineasDe(orden.getId());
         return new OrdenEstado(orden.getId(), orden.getEstado(), orden.getEstadoPago(), orden.getEstadoPreparacion(),

@@ -53,6 +53,23 @@ public class StripePasarela implements PasarelaEnLinea {
     }
 
     @Override
+    public IntentoPago crearIntentoPedido(UUID pedidoId, long montoCentavos, String moneda) {
+        exigirClave();
+        try {
+            PaymentIntent intento = PaymentIntent.create(PaymentIntentCreateParams.builder()
+                    .setAmount(montoCentavos)
+                    .setCurrency(moneda.toLowerCase(Locale.ROOT))
+                    .putMetadata("pedido_id", pedidoId.toString())
+                    // Solo tarjeta: un solo pago para todas las tiendas del pedido.
+                    .addPaymentMethodType("card")
+                    .build(), opciones());
+            return new IntentoPago(intento.getId(), intento.getClientSecret(), intento.getStatus());
+        } catch (StripeException ex) {
+            throw new ConflictoEstadoException("PAG-002", "No pudimos iniciar el pago en línea. Intenta de nuevo");
+        }
+    }
+
+    @Override
     public IntentoPago recuperarIntento(String intentoId) {
         exigirClave();
         try {

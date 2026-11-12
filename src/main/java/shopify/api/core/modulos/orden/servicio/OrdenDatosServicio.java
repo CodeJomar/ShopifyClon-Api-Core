@@ -10,6 +10,7 @@ import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 import shopify.api.core.comun.websocket.VerificadorAccesoOrdenWs;
 import shopify.api.core.modulos.orden.modelo.DatosNotificacionOrden;
 import shopify.api.core.modulos.orden.modelo.DatosTiempoRealOrden;
+import shopify.api.core.modulos.orden.modelo.DatosTiempoRealPedido;
 import shopify.api.core.modulos.orden.repositorio.OrdenRepositorio;
 
 /** Lectura de una orden para correos y notificaciones en tiempo real. Solo lectura. */
@@ -18,6 +19,7 @@ import shopify.api.core.modulos.orden.repositorio.OrdenRepositorio;
 public class OrdenDatosServicio implements VerificadorAccesoOrdenWs {
 
     private final OrdenRepositorio ordenes;
+    private final PedidoServicio pedidos;
 
     @Transactional(readOnly = true)
     public DatosNotificacionOrden datosNotificacion(UUID ordenId) {
@@ -33,6 +35,18 @@ public class OrdenDatosServicio implements VerificadorAccesoOrdenWs {
                 .map(orden -> new DatosTiempoRealOrden(orden.getId(), orden.getTiendaId(), orden.getNumeroOrden(),
                         orden.getTokenAcceso(), orden.getNombreCliente(), orden.getTotal(), orden.getEstado(),
                         orden.getEstadoPago(), orden.getEstadoPreparacion()));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<DatosTiempoRealPedido> datosTiempoRealPedido(UUID pedidoId) {
+        return pedidos.buscarPorId(pedidoId)
+                .map(pedido -> new DatosTiempoRealPedido(pedido.numeroPedido(), pedido.tokenAcceso(), pedido.estado()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existePedidoActivoPorTokenAcceso(String tokenAcceso) {
+        return StringUtils.hasText(tokenAcceso) && pedidos.existePorToken(tokenAcceso);
     }
 
     @Override

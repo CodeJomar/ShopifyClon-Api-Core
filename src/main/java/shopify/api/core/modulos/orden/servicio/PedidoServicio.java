@@ -80,6 +80,11 @@ public class PedidoServicio {
         return pedidos.findFirstByIdAndEliminadoFalse(pedidoId).map(this::resumen);
     }
 
+    @Transactional(readOnly = true)
+    public boolean existePorToken(String tokenAcceso) {
+        return pedidos.findFirstByTokenAccesoAndEliminadoFalse(tokenAcceso).isPresent();
+    }
+
     /** PED-404: el token no existe. Vista pública del invitado. */
     @Transactional(readOnly = true)
     public PedidoResumen porToken(String tokenAcceso) {

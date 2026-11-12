@@ -1,11 +1,16 @@
 package shopify.api.core.modulos.pago.servicio;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import shopify.api.core.modulos.orden.eventos.PedidoPagadoEvento;
 import shopify.api.core.modulos.orden.modelo.OrdenEstado;
 import shopify.api.core.modulos.orden.modelo.PasarelaPago;
 import shopify.api.core.modulos.orden.servicio.OrdenServicio;
@@ -31,6 +36,7 @@ public class WebhookStripeServicio {
     private final PagoRepositorio pagos;
     private final OrdenServicio ordenes;
     private final ConfirmacionPagoServicio confirmacion;
+    private final ApplicationEventPublisher eventos;
     private final TransactionTemplate transaccion;
 
     /** Procesa un evento verificado. Firma inválida lanza 403 PAG-003 desde la pasarela. */
@@ -49,46 +55,75 @@ public class WebhookStripeServicio {
     }
 
     private void confirmarCobro(EventoPasarela evento) {
-        PagoEntidad candidato = pagos.findFirstByPasarelaPagoAndTransaccionIdAndEliminadoFalse(
-                PasarelaPago.STRIPE, evento.intentoId()).orElse(null);
-        if (candidato == null) {
+        // Un cobro de pedido tiene un pago por orden hija con la misma transacción; uno suelto tiene uno solo
+        List<PagoEntidad> candidatos = pagos.findByPasarelaPagoAndTransaccionIdAndEliminadoFalseOrderByOrdenIdAsc(
+                PasarelaPago.STRIPE, evento.intentoId());
+        if (candidatos.isEmpty()) {
             log.warn("Cobro {} sin pago registrado; se ignora", evento.intentoId());
             return;
         }
-        UUID tiendaId = ordenes.tiendaDeOrden(candidato.getOrdenId()).orElse(null);
-        if (tiendaId == null) {
-            log.warn("Cobro {} de una orden inexistente; se ignora", evento.intentoId());
-            return;
+        List<UUID> pagoIds = candidatos.stream().map(PagoEntidad::getId).toList();
+        Map<UUID, UUID> tiendaPorOrden = new HashMap<>();
+        for (PagoEntidad candidato : candidatos) {
+            UUID tiendaId = ordenes.tiendaDeOrden(candidato.getOrdenId()).orElse(null);
+            if (tiendaId == null) {
+                log.warn("Cobro {} de una orden inexistente; se ignora", evento.intentoId());
+                return;
+            }
+            tiendaPorOrden.put(candidato.getOrdenId(), tiendaId);
         }
-        transaccion.executeWithoutResult(estado -> confirmarEnTransaccion(candidato.getId(), tiendaId, evento));
+        transaccion.executeWithoutResult(estado -> confirmarEnTransaccion(pagoIds, tiendaPorOrden, evento));
     }
 
-    private void confirmarEnTransaccion(UUID pagoId, UUID tiendaId, EventoPasarela evento) {
-        PagoEntidad pago = pagos.bloquearPorId(pagoId).orElse(null);
+    /**
+     * Confirma todos los pagos del cobro en una sola transacción (bloqueos en orden de orden, sin cruces). Un evento
+     * repetido ve los pagos ya APROBADOS y no hace nada. El monto cobrado debe ser la suma de las órdenes.
+     */
+    private void confirmarEnTransaccion(List<UUID> pagoIds, Map<UUID, UUID> tiendaPorOrden, EventoPasarela evento) {
+        List<PagoEntidad> bloqueados = new ArrayList<>();
+        for (UUID pagoId : pagoIds) {
+            pagos.bloquearPorId(pagoId).ifPresent(bloqueados::add);
+        }
         // Un fallo no cierra el intento de Stripe: el comprador puede reintentar con otra tarjeta y el cobro llegar después.
         // Por eso un pago RECHAZADO por fallo todavía se confirma si el mismo intento termina cobrándose.
-        if (pago == null || (pago.getEstado() != EstadoRegistroPago.PENDIENTE && pago.getEstado() != EstadoRegistroPago.RECHAZADO)) {
+        List<PagoEntidad> porConfirmar = bloqueados.stream()
+                .filter(p -> p.getEstado() == EstadoRegistroPago.PENDIENTE || p.getEstado() == EstadoRegistroPago.RECHAZADO)
+                .toList();
+        if (porConfirmar.isEmpty()) {
             // Repetido (ya APROBADO) o ya resuelto: no hay efectos
             return;
         }
-        OrdenEstado orden = ordenes.bloquear(tiendaId, pago.getOrdenId());
-        long esperado = orden.total().movePointRight(2).longValueExact();
-        pago.setDetallesRespuesta(detalles(evento));
+        long esperado = 0;
+        for (PagoEntidad pago : porConfirmar) {
+            OrdenEstado orden = ordenes.bloquear(tiendaPorOrden.get(pago.getOrdenId()), pago.getOrdenId());
+            esperado += orden.total().movePointRight(2).longValueExact();
+        }
         if (evento.montoCentavos() != esperado) {
-            pago.setEstado(EstadoRegistroPago.RECHAZADO);
-            pagos.saveAndFlush(pago);
-            log.error("Cobro {} por {} centavos no coincide con el total {}; pago rechazado",
+            for (PagoEntidad pago : porConfirmar) {
+                pago.setDetallesRespuesta(detalles(evento));
+                pago.setEstado(EstadoRegistroPago.RECHAZADO);
+                pagos.saveAndFlush(pago);
+            }
+            log.error("Cobro {} por {} centavos no coincide con el total {}; pagos rechazados",
                     evento.intentoId(), evento.montoCentavos(), esperado);
             return;
         }
-        pago.setEstado(EstadoRegistroPago.APROBADO);
-        pagos.saveAndFlush(pago);
-        confirmacion.confirmar(tiendaId, pago.getId());
+        UUID pedidoId = null;
+        for (PagoEntidad pago : porConfirmar) {
+            pago.setDetallesRespuesta(detalles(evento));
+            pago.setEstado(EstadoRegistroPago.APROBADO);
+            pagos.saveAndFlush(pago);
+            confirmacion.confirmar(tiendaPorOrden.get(pago.getOrdenId()), pago.getId());
+            pedidoId = ordenes.pedidoDeOrden(pago.getOrdenId()).orElse(pedidoId);
+        }
+        if (pedidoId != null) {
+            eventos.publishEvent(new PedidoPagadoEvento(pedidoId));
+        }
     }
 
     private void rechazarCobro(EventoPasarela evento) {
-        pagos.findFirstByPasarelaPagoAndTransaccionIdAndEliminadoFalse(PasarelaPago.STRIPE, evento.intentoId())
-                .ifPresent(candidato -> transaccion.executeWithoutResult(
+        pagos.findByPasarelaPagoAndTransaccionIdAndEliminadoFalseOrderByOrdenIdAsc(PasarelaPago.STRIPE, evento.intentoId())
+                .forEach(candidato -> transaccion.executeWithoutResult(
                         estado -> rechazarEnTransaccion(candidato.getId(), evento)));
     }
 

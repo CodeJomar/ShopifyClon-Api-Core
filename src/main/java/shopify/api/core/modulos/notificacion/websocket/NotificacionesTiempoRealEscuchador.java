@@ -17,6 +17,8 @@ import shopify.api.core.modulos.envio.modelo.DatosEnvio;
 import shopify.api.core.modulos.envio.servicio.EnvioDatosServicio;
 import shopify.api.core.modulos.orden.eventos.OrdenCreadaEvento;
 import shopify.api.core.modulos.orden.eventos.OrdenPagadaEvento;
+import shopify.api.core.modulos.orden.eventos.PedidoPagadoEvento;
+import shopify.api.core.modulos.orden.modelo.DatosTiempoRealPedido;
 import shopify.api.core.modulos.orden.modelo.DatosTiempoRealOrden;
 import shopify.api.core.modulos.orden.servicio.OrdenDatosServicio;
 import shopify.api.core.modulos.pago.eventos.OrdenCanceladaEvento;
@@ -49,6 +51,22 @@ public class NotificacionesTiempoRealEscuchador {
     public void alPagarOrden(OrdenPagadaEvento evento) {
         enviarSeguro("ORDEN_PAGADA", evento.ordenId(),
                 () -> emitirPorOrden("ORDEN_PAGADA", evento.ordenId(), null, null, null, true));
+    }
+
+    /** B6: un cobro único confirmó todas las órdenes del pedido; el comprador recibe un evento a nivel de pedido. */
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void alPagarPedido(PedidoPagadoEvento evento) {
+        try {
+            DatosTiempoRealPedido pedido = ordenes.datosTiempoRealPedido(evento.pedidoId()).orElse(null);
+            if (pedido != null && StringUtils.hasText(pedido.tokenAcceso())) {
+                mensajeria.convertAndSend("/topic/pedidos/" + pedido.tokenAcceso(), new NotificacionPedidoComprador(
+                        "PEDIDO_PAGADO", pedido.numeroPedido(), pedido.estado().name(), reloj.instant()));
+            }
+        } catch (RuntimeException ex) {
+            log.warn("No se pudo emitir la notificación WebSocket PEDIDO_PAGADO para pedido {}: {}",
+                    evento.pedidoId(), ex.getClass().getSimpleName());
+        }
     }
 
     @Async

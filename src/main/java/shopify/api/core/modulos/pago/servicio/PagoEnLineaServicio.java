@@ -3,6 +3,8 @@ package shopify.api.core.modulos.pago.servicio;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +18,10 @@ import shopify.api.core.modulos.orden.modelo.EstadoOrden;
 import shopify.api.core.modulos.orden.modelo.EstadoPago;
 import shopify.api.core.modulos.orden.modelo.OrdenEstado;
 import shopify.api.core.modulos.orden.modelo.PasarelaPago;
+import shopify.api.core.modulos.orden.modelo.OrdenDePedido;
+import shopify.api.core.modulos.orden.modelo.PedidoResumen;
 import shopify.api.core.modulos.orden.servicio.OrdenServicio;
+import shopify.api.core.modulos.orden.servicio.PedidoServicio;
 import shopify.api.core.modulos.pago.dto.response.IniciarPagoResponse;
 import shopify.api.core.modulos.pago.entidad.PagoEntidad;
 import shopify.api.core.modulos.pago.modelo.EstadoRegistroPago;
@@ -36,6 +41,7 @@ public class PagoEnLineaServicio {
 
     private final TiendaServicio tiendas;
     private final OrdenServicio ordenes;
+    private final PedidoServicio pedidos;
     private final PagoRepositorio pagos;
     private final PasarelaEnLinea pasarela;
     private final TransactionTemplate transaccion;
@@ -49,6 +55,11 @@ public class PagoEnLineaServicio {
 
         if (orden.pasarela() != PasarelaPago.STRIPE) {
             throw new ConflictoEstadoException("PAG-002", "Esta orden no se paga en línea");
+        }
+        boolean deVariasTiendas = ordenes.pedidoDeOrden(orden.id()).flatMap(pedidos::buscarPorId)
+                .map(pedido -> pedido.ordenes().size() > 1).orElse(false);
+        if (deVariasTiendas) {
+            throw new ConflictoEstadoException("PAG-002", "Esta orden es parte de un pedido de varias tiendas: paga el pedido completo");
         }
         if (orden.estado() != EstadoOrden.ABIERTA || orden.estadoPago() != EstadoPago.PENDIENTE) {
             throw new ConflictoEstadoException("PAG-002", "Esta orden ya no admite pago");
@@ -101,6 +112,79 @@ public class PagoEnLineaServicio {
         pago.setEstado(EstadoRegistroPago.PENDIENTE);
         pago.setTipo(TipoPago.CARGO);
         pagos.saveAndFlush(pago);
+        return intentoId;
+    }
+
+    /**
+     * R-001 B6: un solo cobro por el total del pedido. Cada orden hija conserva su fila de pago (por su monto) con la
+     * misma transacción de la pasarela; el webhook confirma todas a la vez. Solo tarjeta (D-2).
+     */
+    public IniciarPagoResponse iniciarPedido(String tokenAcceso) {
+        PedidoResumen pedido = pedidos.porToken(tokenAcceso);
+        if (pedido.pasarela() != PasarelaPago.STRIPE) {
+            throw new ConflictoEstadoException("PAG-002", "Este pedido no se paga en línea");
+        }
+        List<OrdenDePedido> hijas = pedido.ordenes().stream()
+                .sorted(Comparator.comparing(OrdenDePedido::ordenId)).toList();
+        boolean admitePago = !hijas.isEmpty() && hijas.stream()
+                .allMatch(o -> o.estado() == EstadoOrden.ABIERTA && o.estadoPago() == EstadoPago.PENDIENTE);
+        if (!admitePago) {
+            throw new ConflictoEstadoException("PAG-002", "Este pedido ya no admite pago");
+        }
+        Instant ahora = Instant.now(reloj);
+        if (pedido.fechaExpiracionPago() == null || !pedido.fechaExpiracionPago().isAfter(ahora)) {
+            throw new ConflictoEstadoException("PAG-002", "El plazo para pagar este pedido venció");
+        }
+
+        Optional<PagoEntidad> pendiente = pagos.findFirstByOrdenIdAndPasarelaPagoAndEstadoAndEliminadoFalse(
+                hijas.get(0).ordenId(), PasarelaPago.STRIPE, EstadoRegistroPago.PENDIENTE);
+        if (pendiente.isPresent()) {
+            String intentoId = pendiente.get().getTransaccionId();
+            boolean mismoCobro = hijas.stream().allMatch(o -> pagos
+                    .findFirstByOrdenIdAndPasarelaPagoAndEstadoAndEliminadoFalse(o.ordenId(), PasarelaPago.STRIPE,
+                            EstadoRegistroPago.PENDIENTE)
+                    .map(p -> intentoId.equals(p.getTransaccionId())).orElse(false));
+            if (!mismoCobro) {
+                throw new ConflictoEstadoException("PAG-002", "Este pedido ya tiene pagos sueltos en curso");
+            }
+            return respuesta(pasarela.recuperarIntento(intentoId), pedido.total(), pedido.moneda());
+        }
+
+        long montoCentavos = pedido.total().movePointRight(2).longValueExact();
+        // Fuera de transacción: la llamada a Stripe no retiene filas bloqueadas (PAG-010)
+        IntentoPago intento = pasarela.crearIntentoPedido(pedido.id(), montoCentavos, pedido.moneda());
+        String vigente = transaccion.execute(estado -> registrarCargosDelPedido(hijas, intento.id(), pedido.moneda()));
+        if (!vigente.equals(intento.id())) {
+            return respuesta(pasarela.recuperarIntento(vigente), pedido.total(), pedido.moneda());
+        }
+        return respuesta(intento, pedido.total(), pedido.moneda());
+    }
+
+    /**
+     * Bloquea las órdenes del pedido en orden de id (sin cruces entre cobros simultáneos) y crea un cargo PENDIENTE por
+     * orden con la misma transacción. Si otro inicio ganó la carrera, devuelve su intento.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public String registrarCargosDelPedido(List<OrdenDePedido> hijas, String intentoId, String moneda) {
+        for (OrdenDePedido hija : hijas) {
+            ordenes.bloquear(hija.tiendaId(), hija.ordenId());
+        }
+        Optional<PagoEntidad> pendiente = pagos.findFirstByOrdenIdAndPasarelaPagoAndEstadoAndEliminadoFalse(
+                hijas.get(0).ordenId(), PasarelaPago.STRIPE, EstadoRegistroPago.PENDIENTE);
+        if (pendiente.isPresent()) {
+            return pendiente.get().getTransaccionId();
+        }
+        for (OrdenDePedido hija : hijas) {
+            PagoEntidad pago = new PagoEntidad();
+            pago.setOrdenId(hija.ordenId());
+            pago.setPasarelaPago(PasarelaPago.STRIPE);
+            pago.setTransaccionId(intentoId);
+            pago.setMonto(hija.total());
+            pago.setMoneda(moneda);
+            pago.setEstado(EstadoRegistroPago.PENDIENTE);
+            pago.setTipo(TipoPago.CARGO);
+            pagos.saveAndFlush(pago);
+        }
         return intentoId;
     }
 

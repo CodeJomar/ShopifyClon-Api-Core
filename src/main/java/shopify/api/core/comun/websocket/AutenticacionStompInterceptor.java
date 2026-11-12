@@ -41,6 +41,7 @@ public class AutenticacionStompInterceptor implements ChannelInterceptor {
     private static final Pattern CANAL_TIENDA = Pattern.compile(
             "^/topic/tienda/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/ordenes$");
     private static final Pattern CANAL_ORDEN = Pattern.compile("^/topic/ordenes/([A-Za-z0-9_-]{8,100})$");
+    private static final Pattern CANAL_PEDIDO = Pattern.compile("^/topic/pedidos/([A-Za-z0-9_-]{8,100})$");
 
     private final JwtProveedor jwtProveedor;
     private final UsuarioSesionRepositorio usuarioSesionRepositorio;
@@ -120,6 +121,14 @@ public class AutenticacionStompInterceptor implements ChannelInterceptor {
         if (orden.matches()) {
             if (!verificadorAccesoOrdenWs.existeOrdenActivaPorTokenAcceso(orden.group(1))) {
                 throw new AccessDeniedException("No tienes acceso a esa orden");
+            }
+            return;
+        }
+
+        Matcher pedido = CANAL_PEDIDO.matcher(destino);
+        if (pedido.matches()) {
+            if (!verificadorAccesoOrdenWs.existePedidoActivoPorTokenAcceso(pedido.group(1))) {
+                throw new AccessDeniedException("No tienes acceso a ese pedido");
             }
             return;
         }

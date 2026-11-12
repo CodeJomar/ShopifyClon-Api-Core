@@ -21,6 +21,10 @@ public interface PagoRepositorio extends JpaRepository<PagoEntidad, UUID> {
     /** Un webhook llega con el id del intento; el par (pasarela, transacción) es único (UxPagosPasarelaTransaccion). */
     Optional<PagoEntidad> findFirstByPasarelaPagoAndTransaccionIdAndEliminadoFalse(PasarelaPago pasarela, String transaccionId);
 
+    /** Un cobro de pedido tiene un pago por orden con la misma transacción (UxPagosPasarelaTransaccionOrden). */
+    List<PagoEntidad> findByPasarelaPagoAndTransaccionIdAndEliminadoFalseOrderByOrdenIdAsc(PasarelaPago pasarela,
+                                                                                         String transaccionId);
+
     /** Cargo en línea todavía pendiente de la orden, para reutilizar su intento al reintentar. */
     Optional<PagoEntidad> findFirstByOrdenIdAndPasarelaPagoAndEstadoAndEliminadoFalse(UUID ordenId, PasarelaPago pasarela,
                                                                                      EstadoRegistroPago estado);

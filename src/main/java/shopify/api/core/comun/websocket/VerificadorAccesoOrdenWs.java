@@ -4,4 +4,7 @@ package shopify.api.core.comun.websocket;
 public interface VerificadorAccesoOrdenWs {
 
     boolean existeOrdenActivaPorTokenAcceso(String tokenAcceso);
+
+    /** Canal público del pedido ({@code /topic/pedidos/{tokenAcceso}}). */
+    boolean existePedidoActivoPorTokenAcceso(String tokenAcceso);
 }

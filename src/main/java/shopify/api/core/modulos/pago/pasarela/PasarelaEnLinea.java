@@ -12,6 +12,14 @@ public interface PasarelaEnLinea {
     /** Crea un intento de cobro por el monto exacto en centavos. */
     IntentoPago crearIntento(UUID ordenId, UUID tiendaId, long montoCentavos, String moneda);
 
+    /**
+     * Crea un solo intento de cobro por el total de un pedido (varias órdenes, una por tienda). Por defecto se comporta
+     * como un intento común con el id del pedido; Stripe lo marca con {@code pedido_id} en los metadatos.
+     */
+    default IntentoPago crearIntentoPedido(UUID pedidoId, long montoCentavos, String moneda) {
+        return crearIntento(pedidoId, pedidoId, montoCentavos, moneda);
+    }
+
     /** Lee un intento existente (para devolver el mismo {@code client_secret} al reintentar). */
     IntentoPago recuperarIntento(String intentoId);
 

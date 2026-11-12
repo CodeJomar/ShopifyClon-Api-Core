@@ -14,6 +14,8 @@ import shopify.api.core.comun.auditoria.AuditoriaServicio;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 import shopify.api.core.comun.util.Dinero;
 import shopify.api.core.modulos.balance.servicio.BalanceServicio;
+import shopify.api.core.modulos.balance.servicio.RepartoServicio;
+import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
 import shopify.api.core.modulos.inventario.modelo.LineaInventario;
 import shopify.api.core.modulos.inventario.servicio.InventarioServicio;
 import shopify.api.core.modulos.orden.eventos.OrdenPagadaEvento;
@@ -37,6 +39,8 @@ public class ConfirmacionPagoServicio {
     private final InventarioServicio inventario;
     private final SuscripcionServicio suscripciones;
     private final BalanceServicio balance;
+    private final RepartoServicio repartos;
+    private final TiendaServicio tiendas;
     private final AuditoriaServicio auditoria;
     private final ApplicationEventPublisher eventos;
 
@@ -65,6 +69,9 @@ public class ConfirmacionPagoServicio {
         BigDecimal comision = comisionDe(tiendaId, orden.total());
         ordenes.aplicarPagoConfirmado(orden.id(), comision);
         balance.registrarVenta(tiendaId, orden.total(), comision);
+        // R-001: asiento del libro de repartos (pedido, orden, tienda, bruto, comisión, neto)
+        repartos.registrarVenta(ordenes.pedidoDeOrden(orden.id()).orElse(null), orden.id(), tiendaId, orden.total(),
+                comision, tiendas.configuracionVenta(tiendaId).moneda());
         eventos.publishEvent(new OrdenPagadaEvento(tiendaId, orden.id()));
     }
 
