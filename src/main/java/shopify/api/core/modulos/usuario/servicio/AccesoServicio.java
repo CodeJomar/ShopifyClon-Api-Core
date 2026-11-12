@@ -8,6 +8,9 @@ import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.comun.seguridad.PermisoPlataforma;
 import shopify.api.core.comun.seguridad.RolTienda;
 import shopify.api.core.modulos.usuario.dto.response.AccesoResponse;
+import shopify.api.core.modulos.usuario.dto.response.AccesoResponse.RolPlataformaAcceso;
+import shopify.api.core.modulos.usuario.entidad.RolPlataformaEntidad;
+import shopify.api.core.modulos.usuario.repositorio.RolPlataformaRepositorio;
 import shopify.api.core.modulos.usuario.dto.response.AccesoResponse.TiendaAccesoResponse;
 import shopify.api.core.modulos.usuario.entidad.UsuarioEntidad;
 import shopify.api.core.modulos.usuario.modelo.TiendaDeUsuarioVista;
@@ -19,6 +22,7 @@ import shopify.api.core.modulos.usuario.repositorio.UsuarioRepositorio;
 public class AccesoServicio {
 
     private final UsuarioRepositorio usuarioRepositorio;
+    private final RolPlataformaRepositorio roles;
 
     @Transactional(readOnly = true)
     public AccesoResponse de(UsuarioEntidad usuario) {
@@ -26,12 +30,17 @@ public class AccesoServicio {
                 .map(AccesoServicio::aTienda)
                 .toList();
         boolean esPropietario = tiendas.stream().anyMatch(TiendaAccesoResponse::esPropietarioDeLaTienda);
-        boolean admin = Boolean.TRUE.equals(usuario.getEsAdministradorPlataforma());
+        boolean superadmin = Boolean.TRUE.equals(usuario.getEsAdministradorPlataforma());
+        RolPlataformaEntidad rol = usuario.getRolPlataformaId() == null ? null
+                : roles.findByIdAndEliminadoFalse(usuario.getRolPlataformaId()).orElse(null);
+        List<String> permisos = superadmin ? PermisoPlataforma.nombresDeTodos()
+                : rol == null ? List.of() : rol.getPermisos().stream().sorted().toList();
         return new AccesoResponse(
                 true,
                 esPropietario,
-                admin,
-                admin ? PermisoPlataforma.nombresDeTodos() : List.of(),
+                superadmin || !permisos.isEmpty(),
+                permisos,
+                rol == null ? null : new RolPlataformaAcceso(rol.getId(), rol.getCodigo(), rol.getNombre()),
                 tiendas);
     }
 

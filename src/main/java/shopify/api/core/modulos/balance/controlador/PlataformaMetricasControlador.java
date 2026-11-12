@@ -11,7 +11,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.ConsultaPaginadaDto;
 import shopify.api.core.comun.dto.RespuestaApi;
-import shopify.api.core.comun.seguridad.SoloAdministradorPlataforma;
+import shopify.api.core.comun.seguridad.PermisoPlataforma;
+import shopify.api.core.comun.seguridad.RequierePermisoPlataforma;
 import shopify.api.core.modulos.balance.dto.response.ComisionTiendaResponse;
 import shopify.api.core.modulos.balance.servicio.MetricasServicio;
 
@@ -19,7 +20,7 @@ import shopify.api.core.modulos.balance.servicio.MetricasServicio;
 @Tag(name = "Plataforma: métricas", description = "Comisiones por tienda")
 @RestController
 @RequestMapping("/plataforma/metricas")
-@SoloAdministradorPlataforma
+@RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_PEDIDOS)
 @RequiredArgsConstructor
 public class PlataformaMetricasControlador {
 

@@ -13,7 +13,8 @@ import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.comun.seguridad.ContextoTienda;
 import shopify.api.core.comun.seguridad.Permiso;
 import shopify.api.core.comun.seguridad.RequierePermiso;
-import shopify.api.core.comun.seguridad.SoloAdministradorPlataforma;
+import shopify.api.core.comun.seguridad.PermisoPlataforma;
+import shopify.api.core.comun.seguridad.RequierePermisoPlataforma;
 import shopify.api.core.modulos.balance.dto.response.RepartoResponse;
 import shopify.api.core.modulos.balance.servicio.RepartoServicio;
 
@@ -35,7 +36,7 @@ public class RepartosControlador {
 
     @Operation(summary = "Repartos de toda la plataforma, opcionalmente de un pedido (solo administrador)")
     @GetMapping("/plataforma/repartos")
-    @SoloAdministradorPlataforma
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_PEDIDOS)
     public ResponseEntity<RespuestaApi<ConsultaPaginadaDto<RepartoResponse>>> deLaPlataforma(
             @RequestParam(name = "pedido_id", required = false) UUID pedidoId,
             @RequestParam(name = "pagina", defaultValue = "0") int pagina) {

@@ -13,7 +13,12 @@ public record AccesoResponse(
         boolean esPropietario,
         boolean esAdministradorPlataforma,
         List<String> permisosPlataforma,
+        RolPlataformaAcceso rolPlataforma,
         List<TiendaAccesoResponse> tiendas) {
+
+    /** Rol de plataforma de un administrador con rol; el superadministrador no lo tiene. */
+    public record RolPlataformaAcceso(UUID id, String codigo, String nombre) {
+    }
 
     /** Una tienda de la persona con su rol y los permisos que ese rol le da en ella. */
     public record TiendaAccesoResponse(

@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.ConsultaPaginadaDto;
 import shopify.api.core.comun.dto.RespuestaApi;
-import shopify.api.core.comun.seguridad.SoloAdministradorPlataforma;
+import shopify.api.core.comun.seguridad.PermisoPlataforma;
+import shopify.api.core.comun.seguridad.RequierePermisoPlataforma;
 import shopify.api.core.modulos.suscripcion.dto.request.MotivoSuscripcionRequest;
 import shopify.api.core.modulos.suscripcion.dto.response.SuscripcionPlataformaResponse;
 import shopify.api.core.modulos.suscripcion.servicio.PlataformaSuscripcionServicio;
@@ -23,7 +24,7 @@ import shopify.api.core.modulos.suscripcion.servicio.PlataformaSuscripcionServic
 @Tag(name = "Plataforma: suscripciones", description = "Suscripciones de todas las tiendas (solo administradores de plataforma)")
 @RestController
 @RequestMapping("/plataforma")
-@SoloAdministradorPlataforma
+@RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_TIENDAS)
 @RequiredArgsConstructor
 public class PlataformaSuscripcionControlador {
 
@@ -39,6 +40,7 @@ public class PlataformaSuscripcionControlador {
 
     @Operation(summary = "Suspender una tienda (SUS-010)")
     @PostMapping("/tiendas/{tiendaId}/suspender")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_SUSPENDER_TIENDAS)
     public ResponseEntity<RespuestaApi<Void>> suspender(
             @PathVariable UUID tiendaId, @Valid @RequestBody MotivoSuscripcionRequest request) {
         suscripcionServicio.suspender(tiendaId, request.motivo());
@@ -47,6 +49,7 @@ public class PlataformaSuscripcionControlador {
 
     @Operation(summary = "Reactivar una tienda suspendida (vuelve al estado anterior)")
     @PostMapping("/tiendas/{tiendaId}/reactivar")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_SUSPENDER_TIENDAS)
     public ResponseEntity<RespuestaApi<Void>> reactivar(
             @PathVariable UUID tiendaId, @Valid @RequestBody MotivoSuscripcionRequest request) {
         suscripcionServicio.reactivar(tiendaId, request.motivo());

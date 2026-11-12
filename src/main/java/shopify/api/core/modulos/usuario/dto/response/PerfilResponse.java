@@ -16,7 +16,9 @@ public record PerfilResponse(
         AccesoResponse acceso) {
 
     public PerfilResponse conAcceso(AccesoResponse nuevoAcceso) {
-        return new PerfilResponse(id, correoElectronico, nombres, apellidos, telefono, esAdministradorPlataforma,
-                dosPasosActivo, fechaCreacion, nuevoAcceso);
+        // Quien administra con un rol de plataforma también ve el panel de administración
+        return new PerfilResponse(id, correoElectronico, nombres, apellidos, telefono,
+                esAdministradorPlataforma || nuevoAcceso.esAdministradorPlataforma(), dosPasosActivo, fechaCreacion,
+                nuevoAcceso);
     }
 }

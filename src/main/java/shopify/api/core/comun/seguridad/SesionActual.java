@@ -30,7 +30,12 @@ public final class SesionActual {
         return Optional.empty();
     }
 
+    /** Administra la plataforma (superadministrador o con rol de plataforma). */
     public static boolean esAdministradorPlataforma() {
-        return usuario().map(UsuarioAutenticado::esAdministradorPlataforma).orElse(false);
+        return usuario().map(UsuarioAutenticado::administraPlataforma).orElse(false);
+    }
+
+    public static boolean tienePermisoPlataforma(PermisoPlataforma permiso) {
+        return usuario().map(u -> u.tiene(permiso)).orElse(false);
     }
 }

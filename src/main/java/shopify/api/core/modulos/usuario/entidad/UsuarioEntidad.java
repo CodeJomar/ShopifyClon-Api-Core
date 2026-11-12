@@ -2,6 +2,7 @@ package shopify.api.core.modulos.usuario.entidad;
 
 import jakarta.persistence.Column;
 import java.time.Instant;
+import java.util.UUID;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -35,6 +36,10 @@ public class UsuarioEntidad extends AuditoriaEntidad {
     /** Solo se cambia en base de datos; ningún DTO ni servicio lo escribe. */
     @Column(name = "\"EsAdministradorPlataforma\"", nullable = false, updatable = false)
     private Boolean esAdministradorPlataforma = false;
+
+    /** Rol de plataforma (B9): da los permisos de administración; nulo si no administra la plataforma. */
+    @Column(name = "\"RolPlataformaId\"")
+    private UUID rolPlataformaId;
 
     /** A-007: los JWT emitidos antes de este instante ya no valen (cambio de clave o cierre de sesiones). */
     @Column(name = "\"SesionesValidasDesde\"")

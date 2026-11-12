@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
+import shopify.api.core.comun.excepcion.AccesoDenegadoException;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 import shopify.api.core.comun.excepcion.SolicitudInvalidaException;
 
@@ -39,7 +40,15 @@ public class ContextoTiendaInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        if (esSoloAdministradorPlataforma(metodo) && !SesionActual.esAdministradorPlataforma()) {
+        RequierePermisoPlataforma permisoPlataforma = permisoPlataforma(metodo);
+        if (permisoPlataforma != null) {
+            if (!SesionActual.esAdministradorPlataforma()) {
+                throw new RecursoNoEncontradoException("SEG-006", "Recurso no encontrado");
+            }
+            if (!SesionActual.tienePermisoPlataforma(permisoPlataforma.value())) {
+                throw new AccesoDenegadoException("SEG-002", "Tu rol no tiene permiso para esta acción");
+            }
+        } else if (esSoloAdministradorPlataforma(metodo) && !SesionActual.esAdministradorPlataforma()) {
             throw new RecursoNoEncontradoException("SEG-006", "Recurso no encontrado");
         }
 
@@ -81,6 +90,13 @@ public class ContextoTiendaInterceptor implements HandlerInterceptor {
         } catch (IllegalArgumentException e) {
             return Optional.empty();
         }
+    }
+
+    /** El permiso del método manda sobre el de la clase. */
+    private static RequierePermisoPlataforma permisoPlataforma(HandlerMethod metodo) {
+        RequierePermisoPlataforma delMetodo = metodo.getMethodAnnotation(RequierePermisoPlataforma.class);
+        return delMetodo != null ? delMetodo
+                : AnnotatedElementUtils.findMergedAnnotation(metodo.getBeanType(), RequierePermisoPlataforma.class);
     }
 
     private static boolean esSoloAdministradorPlataforma(HandlerMethod metodo) {

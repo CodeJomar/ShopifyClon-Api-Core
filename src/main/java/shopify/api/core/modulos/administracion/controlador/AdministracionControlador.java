@@ -19,7 +19,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.ConsultaPaginadaDto;
 import shopify.api.core.comun.dto.RespuestaApi;
-import shopify.api.core.comun.seguridad.SoloAdministradorPlataforma;
+import shopify.api.core.comun.seguridad.PermisoPlataforma;
+import shopify.api.core.comun.seguridad.RequierePermisoPlataforma;
 import shopify.api.core.modulos.administracion.dto.response.AdministracionResponses.PedidoAdmin;
 import shopify.api.core.modulos.administracion.dto.response.AdministracionResponses.RegistroAuditoria;
 import shopify.api.core.modulos.administracion.dto.response.AdministracionResponses.TiendaAdmin;
@@ -33,7 +34,6 @@ import shopify.api.core.modulos.usuario.servicio.UsuarioAdminServicio;
 @Tag(name = "Plataforma: administración", description = "Tiendas, usuarios, auditoría y pedidos de toda la plataforma")
 @RestController
 @RequestMapping("/plataforma")
-@SoloAdministradorPlataforma
 @RequiredArgsConstructor
 public class AdministracionControlador {
 
@@ -45,6 +45,7 @@ public class AdministracionControlador {
 
     @Operation(summary = "Tiendas con dueño, plan y ventas (filtros: q, estado=ACTIVA|INACTIVA, plan)")
     @GetMapping("/tiendas")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_TIENDAS)
     public ResponseEntity<RespuestaApi<ConsultaPaginadaDto<TiendaAdmin>>> tiendas(
             @RequestParam(required = false) String q, @RequestParam(required = false) String estado,
             @RequestParam(required = false) String plan, @RequestParam(name = "pagina", defaultValue = "0") int pagina) {
@@ -53,12 +54,14 @@ public class AdministracionControlador {
 
     @Operation(summary = "Detalle de una tienda: dueño, equipo, suscripción y balance")
     @GetMapping("/tiendas/{tiendaId}")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_TIENDAS)
     public ResponseEntity<RespuestaApi<TiendaAdminDetalle>> tienda(@PathVariable UUID tiendaId) {
         return RespuestaApi.ok(administracion.tienda(tiendaId), "Tienda");
     }
 
     @Operation(summary = "Usuarios (filtros: q, estado=ACTIVO|INACTIVO|BLOQUEADO)")
     @GetMapping("/usuarios")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_USUARIOS)
     public ResponseEntity<RespuestaApi<ConsultaPaginadaDto<UsuarioAdmin>>> usuarios(
             @RequestParam(required = false) String q, @RequestParam(required = false) String estado,
             @RequestParam(name = "pagina", defaultValue = "0") int pagina) {
@@ -67,12 +70,14 @@ public class AdministracionControlador {
 
     @Operation(summary = "Detalle de un usuario con las tiendas en las que participa")
     @GetMapping("/usuarios/{usuarioId}")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_USUARIOS)
     public ResponseEntity<RespuestaApi<UsuarioAdminDetalle>> usuario(@PathVariable UUID usuarioId) {
         return RespuestaApi.ok(administracion.usuario(usuarioId), "Usuario");
     }
 
     @Operation(summary = "Bloquear una cuenta (cierra sus sesiones; queda auditado)")
     @PostMapping("/usuarios/{usuarioId}/bloquear")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_SEGURIDAD)
     public ResponseEntity<RespuestaApi<Void>> bloquear(@PathVariable UUID usuarioId,
                                                        @Valid @RequestBody MotivoBloqueoRequest request) {
         usuariosAdmin.bloquear(usuarioId, request.motivo());
@@ -81,6 +86,7 @@ public class AdministracionControlador {
 
     @Operation(summary = "Desbloquear una cuenta")
     @PostMapping("/usuarios/{usuarioId}/desbloquear")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_SEGURIDAD)
     public ResponseEntity<RespuestaApi<Void>> desbloquear(@PathVariable UUID usuarioId) {
         usuariosAdmin.desbloquear(usuarioId);
         return RespuestaApi.ok(null, "Cuenta desbloqueada");
@@ -88,6 +94,7 @@ public class AdministracionControlador {
 
     @Operation(summary = "Cerrar todas las sesiones de una cuenta")
     @PostMapping("/usuarios/{usuarioId}/cerrar-sesiones")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_SEGURIDAD)
     public ResponseEntity<RespuestaApi<Void>> cerrarSesiones(@PathVariable UUID usuarioId) {
         usuariosAdmin.cerrarSesiones(usuarioId);
         return RespuestaApi.ok(null, "Sesiones cerradas");
@@ -95,6 +102,7 @@ public class AdministracionControlador {
 
     @Operation(summary = "Auditoría de solo lectura (filtros: usuario_id, entidad, accion, categoria=SEGURIDAD|NEGOCIO, desde, hasta)")
     @GetMapping("/auditoria")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_AUDITORIA)
     public ResponseEntity<RespuestaApi<ConsultaPaginadaDto<RegistroAuditoria>>> auditoria(
             @RequestParam(name = "usuario_id", required = false) UUID usuarioId,
             @RequestParam(required = false) String entidad, @RequestParam(required = false) String accion,
@@ -108,6 +116,7 @@ public class AdministracionControlador {
 
     @Operation(summary = "Pedidos de la plataforma con cuántas órdenes tienen pagadas (búsqueda q por número o correo)")
     @GetMapping("/pedidos")
+    @RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_PEDIDOS)
     public ResponseEntity<RespuestaApi<ConsultaPaginadaDto<PedidoAdmin>>> pedidos(
             @RequestParam(required = false) String q, @RequestParam(name = "pagina", defaultValue = "0") int pagina) {
         return RespuestaApi.paginado(administracion.pedidos(q, pagina), "Pedidos");

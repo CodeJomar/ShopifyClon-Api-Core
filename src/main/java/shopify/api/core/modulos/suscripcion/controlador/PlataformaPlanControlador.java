@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.RespuestaApi;
-import shopify.api.core.comun.seguridad.SoloAdministradorPlataforma;
+import shopify.api.core.comun.seguridad.PermisoPlataforma;
+import shopify.api.core.comun.seguridad.RequierePermisoPlataforma;
 import shopify.api.core.modulos.suscripcion.dto.request.ActualizarPlanRequest;
 import shopify.api.core.modulos.suscripcion.dto.request.CrearPlanRequest;
 import shopify.api.core.modulos.suscripcion.dto.response.PlanPlataformaResponse;
@@ -24,7 +25,7 @@ import shopify.api.core.modulos.suscripcion.servicio.PlataformaPlanServicio;
 @Tag(name = "Plataforma: planes", description = "Catálogo de planes (solo administradores de plataforma)")
 @RestController
 @RequestMapping("/plataforma/planes")
-@SoloAdministradorPlataforma
+@RequierePermisoPlataforma(PermisoPlataforma.PLATAFORMA_PLANES)
 @RequiredArgsConstructor
 public class PlataformaPlanControlador {
 
