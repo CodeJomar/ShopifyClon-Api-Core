@@ -2,12 +2,15 @@ package shopify.api.core.modulos.usuario.servicio;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import shopify.api.core.modulos.usuario.dto.request.DosPasosRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import shopify.api.core.comun.auditoria.AccionAuditoria;
+import shopify.api.core.comun.auditoria.AuditoriaServicio;
 import shopify.api.core.comun.excepcion.NoAutenticadoException;
 import shopify.api.core.comun.excepcion.ReglaNegocioException;
 import shopify.api.core.comun.seguridad.SesionActual;
@@ -27,6 +30,7 @@ public class CuentaServicio {
     private final UsuarioMapeador usuarioMapeador;
     private final ContrasenasComunes contrasenasComunes;
     private final AccesoServicio accesoServicio;
+    private final AuditoriaServicio auditoria;
 
     @Transactional(readOnly = true)
     public PerfilResponse perfil() {
@@ -57,6 +61,7 @@ public class CuentaServicio {
         // A-007: un token robado deja de servir en cuanto la víctima cambia la clave (incluye la sesión actual)
         usuario.setSesionesValidasDesde(Instant.now().truncatedTo(ChronoUnit.MILLIS));
         usuarioRepositorio.save(usuario);
+        auditoria.registrar(null, AccionAuditoria.SEGURIDAD_CLAVE_CAMBIADA, "Usuarios", usuario.getId(), null, null);
     }
 
     /** A-007: cierra todas las sesiones del usuario; los JWT ya emitidos responden 401 desde ahora. */
@@ -65,6 +70,8 @@ public class CuentaServicio {
         UsuarioEntidad usuario = usuarioActual();
         usuario.setSesionesValidasDesde(Instant.now().truncatedTo(ChronoUnit.MILLIS));
         usuarioRepositorio.save(usuario);
+        auditoria.registrar(null, AccionAuditoria.SEGURIDAD_SESIONES_CERRADAS, "Usuarios", usuario.getId(),
+                "Cierre por el propio usuario", null);
     }
 
     /** A-007: activa o desactiva el código por correo en el login; exige la contraseña actual (USR-010). */
@@ -75,6 +82,8 @@ public class CuentaServicio {
             throw new ReglaNegocioException("USR-010", "La contraseña actual no es correcta");
         }
         usuario.setDosPasosActivo(request.activo());
+        auditoria.registrar(null, AccionAuditoria.SEGURIDAD_DOS_PASOS_CAMBIADO, "Usuarios", usuario.getId(), null,
+                Map.of("activo", request.activo()));
         return perfilCompleto(usuarioRepositorio.save(usuario));
     }
 

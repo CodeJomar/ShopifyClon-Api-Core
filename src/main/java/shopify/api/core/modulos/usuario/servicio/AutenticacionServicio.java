@@ -13,6 +13,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import shopify.api.core.comun.auditoria.AccionAuditoria;
+import shopify.api.core.comun.auditoria.AuditoriaServicio;
 import shopify.api.core.comun.evento.PublicadorEvento;
 import shopify.api.core.comun.excepcion.ConflictoEstadoException;
 import shopify.api.core.comun.excepcion.ExcepcionNegocio;
@@ -51,6 +53,7 @@ public class AutenticacionServicio {
     private final JwtProveedor jwtProveedor;
     private final UsuarioMapeador usuarioMapeador;
     private final AccesoServicio accesoServicio;
+    private final AuditoriaServicio auditoria;
     private final Clock reloj;
 
     /** Hash que se compara cuando el correo no existe, para que el tiempo de respuesta sea parecido (USR-004). */
@@ -202,6 +205,8 @@ public class AutenticacionServicio {
         if (bloquea) {
             usuario.setIntentosLoginFallidos(0);
             usuario.setBloqueadoHasta(ahora.plus(DURACION_BLOQUEO));
+            auditoria.registrar(null, AccionAuditoria.SEGURIDAD_CUENTA_BLOQUEADA, "Usuarios", usuario.getId(),
+                    "Intentos de acceso fallidos", Map.of("minutos", DURACION_BLOQUEO.toMinutes()));
             String codigo = codigoSeguridadServicio.emitir(usuario.getId(), TipoCodigoSeguridad.DESBLOQUEO_CUENTA);
             publicadorEvento.publicar(new CuentaBloqueadaEvento(
                     usuario.getCorreoElectronico(), usuario.getNombres(), codigo, DURACION_BLOQUEO.toMinutes()));
