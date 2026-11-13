@@ -42,6 +42,24 @@ public class RepartoServicio {
         repartos.saveAndFlush(reparto);
     }
 
+    /**
+     * Asiento negativo de un reembolso aprobado de una orden: bruto y neto por −monto, sin devolver comisión (igual que
+     * el balance de la tienda: reembolsado += monto, saldo −= monto). Varios reembolsos de una orden son varios asientos.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void registrarReembolso(UUID pedidoId, UUID ordenId, UUID tiendaId, BigDecimal monto, String moneda) {
+        RepartoPagoEntidad reparto = new RepartoPagoEntidad();
+        reparto.setPedidoId(pedidoId);
+        reparto.setOrdenId(ordenId);
+        reparto.setTiendaId(tiendaId);
+        reparto.setTipo("REEMBOLSO");
+        reparto.setBruto(monto.negate());
+        reparto.setComision(BigDecimal.ZERO.setScale(2));
+        reparto.setNeto(monto.negate());
+        reparto.setMoneda(moneda);
+        repartos.saveAndFlush(reparto);
+    }
+
     @Transactional(readOnly = true)
     public Page<RepartoResponse> movimientosDeTienda(UUID tiendaId, int pagina) {
         return repartos.findByTiendaIdAndEliminadoFalseOrderByFechaCreacionDesc(tiendaId, pagina(pagina))

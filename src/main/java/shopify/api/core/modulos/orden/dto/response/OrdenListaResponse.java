@@ -18,5 +18,7 @@ public record OrdenListaResponse(
         String moneda,
         EstadoOrden estado,
         EstadoPago estadoPago,
-        EstadoPreparacion estadoPreparacion) {
+        EstadoPreparacion estadoPreparacion,
+        UUID pedidoId,
+        String numeroPedido) {
 }

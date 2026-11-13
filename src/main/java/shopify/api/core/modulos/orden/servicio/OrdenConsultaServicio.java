@@ -30,6 +30,7 @@ import shopify.api.core.modulos.orden.modelo.EstadoPago;
 import shopify.api.core.modulos.orden.modelo.EstadoPreparacion;
 import shopify.api.core.modulos.orden.repositorio.ItemOrdenRepositorio;
 import shopify.api.core.modulos.orden.repositorio.OrdenConsultaRepositorio;
+import shopify.api.core.modulos.orden.repositorio.PedidoRepositorio;
 import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
 
 /**
@@ -45,6 +46,7 @@ public class OrdenConsultaServicio {
     private static final UUID SIN_TIENDA = new UUID(0L, 0L);
 
     private final OrdenConsultaRepositorio ordenes;
+    private final PedidoRepositorio pedidos;
     private final ItemOrdenRepositorio items;
     private final TiendaServicio tiendas;
     private final JdbcTemplate jdbc;
@@ -66,9 +68,11 @@ public class OrdenConsultaServicio {
                 conEstado, filtroEstado, conPago, filtroPago, conPreparacion, filtroPreparacion,
                 inicioDelDia(desde, DESDE_MINIMO), finDelDia(hasta), patron(texto),
                 PageRequest.of(Math.max(pagina, 0), TAMANO_PAGINA, Sort.by(Sort.Direction.DESC, "fechaCreacion")));
+        Map<UUID, String> numerosDePedido = numerosDePedido(resultado.getContent());
         return resultado.map(orden -> new OrdenListaResponse(orden.getId(), orden.getNumeroOrden(),
                 orden.getFechaCreacion(), orden.getNombreCliente(), orden.getCorreoCliente(), orden.getTotal(), moneda,
-                orden.getEstado(), orden.getEstadoPago(), orden.getEstadoPreparacion()));
+                orden.getEstado(), orden.getEstadoPago(), orden.getEstadoPreparacion(), orden.getPedidoId(),
+                numerosDePedido.get(orden.getPedidoId())));
     }
 
     /** ORD-011: detalle completo para el panel. Otra tienda → ORD-404. */
@@ -81,7 +85,16 @@ public class OrdenConsultaServicio {
                 o.getTotal(), monedaDe(tiendaId), o.getCodigoCupon(), o.getNombreTarifaEnvio(), o.getTasaImpuesto(),
                 o.getPreciosIncluyenImpuesto(), o.getPasarelaPago(), o.getEstado(), o.getEstadoPago(),
                 o.getEstadoPreparacion(), o.getFechaExpiracionPago(), o.getFechaCancelacion(), o.getMotivoCancelacion(),
-                o.getFechaCierre(), o.getComisionPlataforma());
+                o.getFechaCierre(), o.getComisionPlataforma(), o.getPedidoId(),
+                numerosDePedido(List.of(o)).get(o.getPedidoId()));
+    }
+
+    /** Número del pedido padre de cada orden (R-001); una orden sin pedido no aparece en el mapa. */
+    private Map<UUID, String> numerosDePedido(List<OrdenEntidad> lista) {
+        List<UUID> ids = lista.stream().map(OrdenEntidad::getPedidoId).filter(java.util.Objects::nonNull).distinct().toList();
+        Map<UUID, String> numeros = new HashMap<>();
+        pedidos.findAllById(ids).forEach(p -> numeros.put(p.getId(), p.getNumeroPedido()));
+        return numeros;
     }
 
     /** ORD-012: historial del comprador; {@code tiendaId} nulo significa todas sus tiendas. Sin comisión. */

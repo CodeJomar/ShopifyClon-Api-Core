@@ -39,5 +39,7 @@ public record OrdenDetallePanelResponse(
         Instant fechaCancelacion,
         String motivoCancelacion,
         Instant fechaCierre,
-        BigDecimal comisionPlataforma) {
+        BigDecimal comisionPlataforma,
+        UUID pedidoId,
+        String numeroPedido) {
 }

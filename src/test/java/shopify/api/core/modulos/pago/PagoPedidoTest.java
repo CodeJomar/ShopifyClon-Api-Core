@@ -222,4 +222,47 @@ class PagoPedidoTest extends PruebaIntegracionBase {
         assertThat(todos.get("total").asInt()).isEqualTo(2);
         getConToken("/plataforma/repartos", tokenPara(duenoA, correoA), null).andExpect(status().isNotFound());
     }
+
+    @Test
+    void elReembolsoDeUnaOrdenHijaDejaAsientoNegativoYNoTocaLaOtra() throws Exception {
+        pagarPedido().andExpect(status().isOk());
+        webhook(intentoDelPedido(), centavos()).andExpect(status().isOk());
+        String subdominioA = jdbc.queryForObject("SELECT \"Subdominio\" FROM \"Tiendas\" WHERE \"Id\" = ?", String.class, tiendaA);
+        String ordenA = null;
+        String ordenB = null;
+        for (JsonNode orden : pedido.get("ordenes")) {
+            if (orden.get("tienda").get("subdominio").asText().equals(subdominioA)) {
+                ordenA = orden.get("orden_id").asText();
+            } else {
+                ordenB = orden.get("orden_id").asText();
+            }
+        }
+        UUID duenoA = jdbc.queryForObject("SELECT \"PropietarioId\" FROM \"Tiendas\" WHERE \"Id\" = ?", UUID.class, tiendaA);
+        String correoA = jdbc.queryForObject("SELECT \"CorreoElectronico\" FROM \"Usuarios\" WHERE \"Id\" = ?", String.class, duenoA);
+        String jwtA = tokenPara(duenoA, correoA);
+
+        postJson("/panel/ordenes/" + ordenA + "/reembolsos", Map.of("monto", 5.00, "motivo", "Producto dañado"), jwtA, tiendaA)
+                .andExpect(status().isCreated());
+
+        assertThat(jdbc.queryForObject("SELECT \"EstadoPago\" FROM \"Ordenes\" WHERE \"Id\" = ?::uuid", String.class, ordenA))
+                .isEqualTo("PARCIALMENTE_REEMBOLSADO");
+        assertThat(jdbc.queryForObject("SELECT \"EstadoPago\" FROM \"Ordenes\" WHERE \"Id\" = ?::uuid", String.class, ordenB))
+                .isEqualTo("PAGADO");
+        List<Map<String, Object>> asientos = jdbc.queryForList(
+                "SELECT \"Bruto\", \"Neto\", \"TiendaId\" FROM \"RepartosPago\" WHERE \"Tipo\" = 'REEMBOLSO' AND \"PedidoId\" = ?::uuid",
+                pedido.get("pedido_id").asText());
+        assertThat(asientos).hasSize(1);
+        assertThat((BigDecimal) asientos.get(0).get("Bruto")).isEqualByComparingTo("-5.00");
+        assertThat((BigDecimal) asientos.get(0).get("Neto")).isEqualByComparingTo("-5.00");
+        assertThat(asientos.get(0).get("TiendaId")).isEqualTo(tiendaA);
+
+        // El panel de la tienda ve a qué pedido pertenece cada orden y nada de la otra tienda
+        JsonNode detalle = cuerpo(getConToken("/panel/ordenes/" + ordenA, jwtA, tiendaA).andExpect(status().isOk())).get("datos");
+        assertThat(detalle.get("pedido_id").asText()).isEqualTo(pedido.get("pedido_id").asText());
+        assertThat(detalle.get("numero_pedido").asText()).isEqualTo(pedido.get("numero_pedido").asText());
+        JsonNode lista = cuerpo(getConToken("/panel/ordenes?estado_pago=PARCIALMENTE_REEMBOLSADO", jwtA, tiendaA)
+                .andExpect(status().isOk())).get("datos");
+        assertThat(lista.get("datos").get(0).get("numero_pedido").asText()).isEqualTo(pedido.get("numero_pedido").asText());
+        getConToken("/panel/ordenes/" + ordenB, jwtA, tiendaA).andExpect(status().isNotFound());
+    }
 }

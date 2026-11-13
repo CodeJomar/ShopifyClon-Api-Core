@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rediseño · Laboratorio</title>
+  <link rel="stylesheet" href="assets/lab.css">
+</head>
+<body>
+<div id="app"></div>
+<script src="assets/lab.js"></script>
+<script src="assets/recetas.js"></script>
+<script>
+(function () {
+  var R = Lab.R;
+  function G(ruta, query, extra) { var o = { metodo: 'GET', ruta: ruta, query: query || {}, sesion: false }; for (var k in (extra || {})) { o[k] = extra[k]; } return o; }
+  function S(ruta, query) { return { metodo: 'GET', ruta: ruta, query: query || {} }; }
+  var inexistente = '00000000-0000-0000-0000-000000000000';
+
+  Lab.pagina({
+    archivo: 'rediseno.html',
+    titulo: 'Rediseño: mercado, carrito global, pedidos y administración',
+    descripcion: 'Lo nuevo del rediseño (R-001): mercado público, carrito con productos de varias tiendas, pedidos con una orden por tienda, pago único, panel del propietario y administración de plataforma. Los contratos completos con JSON están en `docs/rediseno/01-necesidades-backend.md`.',
+    avisos: [
+      'Las pruebas de **mercado** y **carrito** no necesitan sesión. Las de **propietario** necesitan iniciar sesión; las de **plataforma** necesitan una cuenta de administrador de plataforma.',
+      'Para que el mercado muestre algo hace falta una tienda operativa con un producto **publicado y con imagen principal**.',
+      'El carrito global usa su propio token (`X-Carrito-Token`), que se guarda como `carritoGlobalToken`.'
+    ],
+    recetas: [R.usarTiendaExistente, R.crearTienda, R.crearProducto],
+    endpoints: [
+      {
+        id: 'mercado-productos', metodo: 'GET', ruta: '/mercado/productos', titulo: 'Productos del mercado', acceso: 'público',
+        sirve: 'Productos publicados de todas las tiendas visibles, con búsqueda (sin tildes), filtros y orden. Tamaño máximo 48.',
+        casos: [
+          { titulo: 'Primera página', tipo: 'ok', peticion: function () { return G('/mercado/productos'); }, espera: { estado: 200 } },
+          { titulo: 'Buscar por texto', tipo: 'ok', campos: [{ k: 'q', etiqueta: 'Texto', valor: 'a' }], peticion: function (c) { return G('/mercado/productos', { q: c.v.q }); }, espera: { estado: 200 } },
+          { titulo: 'Más baratos primero', tipo: 'ok', peticion: function () { return G('/mercado/productos', { orden: 'precio_asc', tamano: 12 }); }, espera: { estado: 200 } },
+          { titulo: 'Orden inválido', tipo: 'validacion', peticion: function () { return G('/mercado/productos', { orden: 'inventado' }); }, espera: { estado: 400, codigo: 'VAL-003' } },
+          { titulo: 'Tamaño mayor a 48', tipo: 'validacion', peticion: function () { return G('/mercado/productos', { tamano: 500 }); }, espera: { estado: 400, codigo: 'VAL-003' } }
+        ]
+      },
+      {
+        id: 'mercado-tiendas', metodo: 'GET', ruta: '/mercado/tiendas', titulo: 'Tiendas, categorías y destacados', acceso: 'público',
+        casos: [
+          { titulo: 'Tiendas visibles', tipo: 'ok', peticion: function () { return G('/mercado/tiendas'); }, espera: { estado: 200 } },
+          { titulo: 'Ficha de la tienda activa', tipo: 'ok', necesita: ['subdominio'], peticion: function (c) { return G('/mercado/tiendas/' + c.e.obtener('subdominio')); }, espera: { estado: [200, 404] } },
+          { titulo: 'Tienda que no existe', tipo: 'error', peticion: function () { return G('/mercado/tiendas/no-existe-' + Lab.azar(6)); }, espera: { estado: 404, codigo: 'TIE-404' } },
+          { titulo: 'Categorías', tipo: 'ok', peticion: function () { return G('/mercado/categorias'); }, espera: { estado: 200 } },
+          { titulo: 'Destacados para la landing', tipo: 'ok', peticion: function () { return G('/mercado/destacados'); }, espera: { estado: 200 } }
+        ]
+      },
+      {
+        id: 'carrito-global', metodo: 'POST', ruta: '/carrito', titulo: 'Carrito global', acceso: 'público + X-Carrito-Token', cabeceras: 'X-Carrito-Token',
+        sirve: 'Un carrito con productos de varias tiendas, en una sola moneda. Responde agrupado por tienda y con `total_general`.',
+        notas: ['Agregar sin token crea uno nuevo y lo devuelve. Otra moneda da 409 `CAR-009`.'],
+        casos: [
+          { titulo: 'Crear carrito vacío', tipo: 'ok', peticion: function () { return { metodo: 'POST', ruta: '/carrito', sesion: false }; }, espera: { estado: 201 }, despues: function (r, c) { c.e.poner('carritoGlobalToken', r.json.datos.token); } },
+          { titulo: 'Agregar la variante guardada', tipo: 'ok', necesita: ['varianteId'], peticion: function (c) { return { metodo: 'POST', ruta: '/carrito/items', sesion: false, cabeceras: { 'X-Carrito-Token': c.e.obtener('carritoGlobalToken') || '' }, cuerpo: { variante_id: c.e.obtener('varianteId'), cantidad: 1 } }; }, espera: { estado: 200 }, despues: function (r, c) { c.e.poner('carritoGlobalToken', r.json.datos.token); } },
+          { titulo: 'Ver el carrito', tipo: 'ok', peticion: function (c) { return { metodo: 'GET', ruta: '/carrito', sesion: false, cabeceras: { 'X-Carrito-Token': c.e.obtener('carritoGlobalToken') || '' } }; }, espera: { estado: 200 } },
+          { titulo: 'Tarifas de envío por tienda', tipo: 'ok', peticion: function (c) { return { metodo: 'GET', ruta: '/carrito/tarifas', sesion: false, cabeceras: { 'X-Carrito-Token': c.e.obtener('carritoGlobalToken') || '' } }; }, espera: { estado: 200 } },
+          { titulo: 'Variante que no existe', tipo: 'error', peticion: function (c) { return { metodo: 'POST', ruta: '/carrito/items', sesion: false, cabeceras: { 'X-Carrito-Token': c.e.obtener('carritoGlobalToken') || '' }, cuerpo: { variante_id: inexistente, cantidad: 1 } }; }, espera: { estado: [404, 422], codigo: 'CAR-002' } },
+          { titulo: 'Vincular sin sesión', tipo: 'seguridad', peticion: function (c) { return { metodo: 'POST', ruta: '/carrito/vincular', sesion: false, cabeceras: { 'X-Carrito-Token': c.e.obtener('carritoGlobalToken') || '' } }; }, espera: { estado: 401 } }
+        ]
+      },
+      {
+        id: 'pedidos', metodo: 'GET', ruta: '/pedidos/{tokenAcceso}', titulo: 'Pedidos y pago único', acceso: 'token del pedido / sesión',
+        sirve: '`POST /checkout` crea el pedido (una orden hija por tienda). `GET /pedidos/{token}` lo lee sin sesión; `POST /pedidos/{token}/pagar` inicia un solo cobro con tarjeta.',
+        notas: ['`POST /checkout` necesita `Idempotency-Key` (UUID) y `total_esperado`: cotiza antes con `POST /carrito/cotizar`.'],
+        casos: [
+          { titulo: 'Pedido con un token que no existe', tipo: 'error', peticion: function () { return G('/pedidos/token-que-no-existe'); }, espera: { estado: 404, codigo: 'PED-404' } },
+          { titulo: 'Pagar un pedido que no existe', tipo: 'error', peticion: function () { return { metodo: 'POST', ruta: '/pedidos/token-que-no-existe/pagar', sesion: false }; }, espera: { estado: 404, codigo: 'PED-404' } },
+          { titulo: 'Mis pedidos', tipo: 'ok', peticion: function () { return S('/cuenta/pedidos'); }, espera: { estado: 200 } },
+          { titulo: 'Mis pedidos sin sesión', tipo: 'seguridad', peticion: function () { return G('/cuenta/pedidos'); }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'propietario', metodo: 'GET', ruta: '/propietario/resumen', titulo: 'Panel general del propietario', acceso: 'sesión',
+        sirve: 'Ventas, saldo, suscripción y alertas de todas las tiendas propias, con totales por moneda. No necesita tienda activa.',
+        casos: [
+          { titulo: 'Resumen por defecto', tipo: 'ok', peticion: function () { return S('/propietario/resumen'); }, espera: { estado: 200 } },
+          { titulo: 'Rango inválido', tipo: 'validacion', peticion: function () { return S('/propietario/resumen', { desde: Lab.fecha(0), hasta: Lab.fecha(-5) }); }, espera: { estado: 422, codigo: 'MET-001' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function () { return G('/propietario/resumen'); }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'plataforma-admin', metodo: 'GET', ruta: '/plataforma/tiendas', titulo: 'Administración de plataforma', acceso: 'administrador de plataforma (por permisos)',
+        sirve: 'Tiendas, usuarios, auditoría, pedidos y repartos de toda la plataforma. Un administrador con rol solo ve lo que su rol permite (403 `SEG-002` si no).',
+        casos: [
+          { titulo: 'Tiendas', tipo: 'ok', peticion: function () { return S('/plataforma/tiendas'); }, espera: { estado: 200 } },
+          { titulo: 'Usuarios bloqueados', tipo: 'ok', peticion: function () { return S('/plataforma/usuarios', { estado: 'BLOQUEADO' }); }, espera: { estado: 200 } },
+          { titulo: 'Auditoría de seguridad', tipo: 'ok', peticion: function () { return S('/plataforma/auditoria', { categoria: 'SEGURIDAD' }); }, espera: { estado: 200 } },
+          { titulo: 'Pedidos', tipo: 'ok', peticion: function () { return S('/plataforma/pedidos'); }, espera: { estado: 200 } },
+          { titulo: 'Repartos', tipo: 'ok', peticion: function () { return S('/plataforma/repartos'); }, espera: { estado: 200 } },
+          { titulo: 'Categoría de auditoría inválida', tipo: 'validacion', peticion: function () { return S('/plataforma/auditoria', { categoria: 'raro' }); }, espera: { estado: 400, codigo: 'VAL-003' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function () { return G('/plataforma/tiendas'); }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      },
+      {
+        id: 'roles', metodo: 'GET', ruta: '/plataforma/roles', titulo: 'Roles y administradores', acceso: 'permiso PLATAFORMA_ADMINISTRADORES',
+        sirve: 'Catálogo de permisos, roles de plataforma y administradores con rol. Nadie asigna permisos que no tiene, nadie se modifica a sí mismo y el superadministrador no se toca desde la API.',
+        casos: [
+          { titulo: 'Permisos', tipo: 'ok', peticion: function () { return S('/plataforma/permisos'); }, espera: { estado: 200 } },
+          { titulo: 'Roles', tipo: 'ok', peticion: function () { return S('/plataforma/roles'); }, espera: { estado: 200 } },
+          { titulo: 'Administradores', tipo: 'ok', peticion: function () { return S('/plataforma/administradores'); }, espera: { estado: 200 } },
+          { titulo: 'Crear rol con un permiso inventado', tipo: 'validacion', peticion: function () { return { metodo: 'POST', ruta: '/plataforma/roles', cuerpo: { codigo: 'PRUEBA_' + Lab.azar(4).toUpperCase(), nombre: 'Prueba', permisos: ['INVENTADO'] } }; }, espera: { estado: 400, codigo: 'VAL-003' } },
+          { titulo: 'Sin sesión', tipo: 'seguridad', peticion: function () { return G('/plataforma/roles'); }, espera: { estado: 401, codigo: 'SEG-007' } }
+        ]
+      }
+    ]
+  });
+})();
+</script>
+</body>
+</html>

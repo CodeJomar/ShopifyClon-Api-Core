@@ -33,6 +33,8 @@
     ['Administración', [
       ['metricas.html', 'Métricas'],
       ['plataforma.html', 'Plataforma']]],
+    ['Rediseño (R-001)', [
+      ['rediseno.html', 'Mercado, carrito global, pedidos y administración']]],
     ['Tiempo real', [
       ['tiempo-real.html', 'Notificaciones WebSocket']]]
   ];

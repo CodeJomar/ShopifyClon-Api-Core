@@ -15,6 +15,8 @@ import shopify.api.core.comun.auditoria.AuditoriaServicio;
 import shopify.api.core.comun.excepcion.ConflictoEstadoException;
 import shopify.api.core.comun.excepcion.ReglaNegocioException;
 import shopify.api.core.modulos.balance.servicio.BalanceServicio;
+import shopify.api.core.modulos.balance.servicio.RepartoServicio;
+import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
 import shopify.api.core.modulos.inventario.modelo.LineaInventario;
 import shopify.api.core.modulos.inventario.servicio.InventarioServicio;
 import shopify.api.core.modulos.orden.modelo.EstadoPago;
@@ -43,6 +45,8 @@ public class ReembolsoServicio {
     private final OrdenServicio ordenes;
     private final InventarioServicio inventario;
     private final BalanceServicio balance;
+    private final RepartoServicio repartos;
+    private final TiendaServicio tiendas;
     private final AuditoriaServicio auditoria;
     private final PasarelaEnLinea pasarela;
     private final TransactionTemplate transaccion;
@@ -170,6 +174,9 @@ public class ReembolsoServicio {
                 inventario.reponer(tiendaId, plan.reposicion(), ordenId, motivo);
             }
             balance.registrarReembolso(tiendaId, plan.monto());
+            // R-001: el reembolso de una orden hija queda en el libro de repartos, con valores negativos
+            repartos.registrarReembolso(ordenes.pedidoDeOrden(ordenId).orElse(null), ordenId, tiendaId, plan.monto(),
+                    tiendas.configuracionVenta(tiendaId).moneda());
         }
         Map<String, Object> detalle = new LinkedHashMap<>();
         detalle.put("monto", plan.monto().toPlainString());
