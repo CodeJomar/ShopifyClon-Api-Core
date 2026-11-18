@@ -16,9 +16,9 @@ class MigracionesTest extends PruebaIntegracionBase {
     }
 
     @Test
-    void existenLosTresPlanes() {
+    void existenLosCuatroPlanes() {
         List<String> codigos = jdbc.queryForList("SELECT \"Codigo\" FROM \"PlanesSuscripcion\"", String.class);
-        assertThat(codigos).containsExactlyInAnyOrder("BASICO", "ESTANDAR", "AVANZADO");
+        assertThat(codigos).containsExactlyInAnyOrder("GRATIS", "BASICO", "ESTANDAR", "AVANZADO");
     }
 
     @Test
