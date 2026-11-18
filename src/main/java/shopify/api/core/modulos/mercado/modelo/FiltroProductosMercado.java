@@ -19,7 +19,8 @@ public record FiltroProductosMercado(
     public enum OrdenProductos {
         RECIENTES("p.\"FechaCreacion\" DESC, p.\"Id\""),
         PRECIO_ASC("vmin.\"Precio\" ASC, p.\"Id\""),
-        PRECIO_DESC("vmin.\"Precio\" DESC, p.\"Id\"");
+        PRECIO_DESC("vmin.\"Precio\" DESC, p.\"Id\""),
+        MEJOR_CALIFICADOS("COALESCE(rating.promedio, 0) DESC, rating.cantidad DESC, p.\"FechaCreacion\" DESC, p.\"Id\"");
 
         private final String sql;
 

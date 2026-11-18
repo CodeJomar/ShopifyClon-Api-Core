@@ -1,5 +1,6 @@
 package shopify.api.core.modulos.catalogo.servicio;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -28,6 +29,8 @@ import shopify.api.core.modulos.catalogo.repositorio.ProductoRepositorio;
 import shopify.api.core.modulos.catalogo.repositorio.VarianteProductoRepositorio;
 import shopify.api.core.modulos.inventario.modelo.Disponibilidad;
 import shopify.api.core.modulos.inventario.servicio.InventarioServicio;
+import shopify.api.core.modulos.resena.dto.response.ResenaResponses.Calificacion;
+import shopify.api.core.modulos.resena.servicio.ResenaServicio;
 import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
 
 /** Catálogo público por subdominio: solo productos publicados de tiendas operativas (CAT-011). */
@@ -48,6 +51,7 @@ public class VitrinaCatalogoServicio {
     private final ImagenProductoRepositorio imagenes;
     private final ProductoCategoriaRepositorio productoCategorias;
     private final InventarioServicio inventario;
+    private final ResenaServicio resenas;
 
     @Transactional(readOnly = true)
     public List<VitrinaResponses.Categoria> categorias(String subdominio) {
@@ -72,6 +76,7 @@ public class VitrinaCatalogoServicio {
         Map<UUID, Disponibilidad> disponibilidad = inventario.disponibilidad(
                 porProducto.values().stream().flatMap(List::stream).map(VarianteProductoEntidad::getId).toList());
         Map<UUID, String> principales = imagenesPrincipales(candidatos);
+        Map<UUID, Calificacion> calificaciones = resenas.calificaciones(candidatos.stream().map(ProductoEntidad::getId).toList());
 
         List<VitrinaResponses.ProductoResumen> resumenes = new ArrayList<>();
         for (ProductoEntidad producto : candidatos) {
@@ -82,7 +87,9 @@ public class VitrinaCatalogoServicio {
             VarianteProductoEntidad barata = vs.stream().min(MAS_BARATA).orElseThrow();
             resumenes.add(new VitrinaResponses.ProductoResumen(producto.getTitulo(), producto.getIdentificadorUrl(),
                     barata.getPrecio(), barata.getPrecioComparacion(), principales.get(producto.getId()),
-                    disponible(disponibilidad, barata.getId())));
+                    disponible(disponibilidad, barata.getId()),
+                    calificaciones.containsKey(producto.getId()) ? calificaciones.get(producto.getId()).promedio() : null,
+                    calificaciones.containsKey(producto.getId()) ? calificaciones.get(producto.getId()).cantidad() : 0L));
         }
         resumenes.sort(comparador);
 
@@ -107,6 +114,7 @@ public class VitrinaCatalogoServicio {
         Map<UUID, Disponibilidad> disponibilidad = inventario.disponibilidad(
                 vs.stream().map(VarianteProductoEntidad::getId).toList());
         List<ImagenProductoEntidad> imgs = imagenes.findByProductoIdAndEliminadoFalseOrderByPosicionAscFechaCreacionAsc(producto.getId());
+        Calificacion calificacion = resenas.calificaciones(List.of(producto.getId())).get(producto.getId());
 
         return new VitrinaResponses.ProductoDetalle(
                 producto.getTitulo(),
@@ -121,7 +129,9 @@ public class VitrinaCatalogoServicio {
                 imgs.stream()
                         .map(i -> new VitrinaResponses.Imagen(i.getUrlImagen(), i.getTextoAlternativo(),
                                 i.getVarianteId(), i.getPosicion()))
-                        .toList());
+                        .toList(),
+                calificacion == null ? null : calificacion.promedio(),
+                calificacion == null ? 0L : calificacion.cantidad());
     }
 
     /** TIE-004 y TIE-404: una tienda que no existe o no es operativa responde lo mismo. */
@@ -142,8 +152,12 @@ public class VitrinaCatalogoServicio {
             case "recientes" -> (a, b) -> 0;
             case "precio_asc" -> Comparator.comparing(VitrinaResponses.ProductoResumen::precioMinimo);
             case "precio_desc" -> Comparator.comparing(VitrinaResponses.ProductoResumen::precioMinimo).reversed();
+            case "mejor_calificados" -> Comparator
+                    .comparing((VitrinaResponses.ProductoResumen p) -> p.calificacionPromedio() == null
+                            ? BigDecimal.ZERO : p.calificacionPromedio()).reversed()
+                    .thenComparing(Comparator.comparingLong(VitrinaResponses.ProductoResumen::cantidadResenas).reversed());
             default -> throw new SolicitudInvalidaException("VAL-003",
-                    "El parámetro «orden» debe ser recientes, precio_asc o precio_desc");
+                    "El parámetro «orden» debe ser recientes, precio_asc, precio_desc o mejor_calificados");
         };
     }
 

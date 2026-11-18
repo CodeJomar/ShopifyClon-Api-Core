@@ -22,7 +22,9 @@ public final class VitrinaResponses {
             BigDecimal precioMinimo,
             BigDecimal precioComparacion,
             String imagenPrincipal,
-            boolean disponible) {
+            boolean disponible,
+            BigDecimal calificacionPromedio,
+            long cantidadResenas) {
     }
 
     public record ProductoDetalle(
@@ -31,7 +33,9 @@ public final class VitrinaResponses {
             String descripcion,
             List<Categoria> categorias,
             List<Variante> variantes,
-            List<Imagen> imagenes) {
+            List<Imagen> imagenes,
+            BigDecimal calificacionPromedio,
+            long cantidadResenas) {
     }
 
     public record Variante(

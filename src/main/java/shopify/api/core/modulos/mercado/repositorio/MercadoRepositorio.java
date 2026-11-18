@@ -53,7 +53,9 @@ public class MercadoRepositorio {
             rs.getBoolean("hay_stock"),
             rs.getString("tienda_nombre"),
             rs.getString("tienda_subdominio"),
-            rs.getString("tienda_logo_url"));
+            rs.getString("tienda_logo_url"),
+            rs.getBigDecimal("calificacion_promedio"),
+            rs.getLong("cantidad_resenas"));
 
     private static final RowMapper<TiendaMercado> FILA_TIENDA = (rs, fila) -> new TiendaMercado(
             rs.getString("nombre"),
@@ -79,6 +81,9 @@ public class MercadoRepositorio {
             JOIN LATERAL (SELECT i."UrlImagen" FROM "ImagenesProducto" i
                           WHERE i."ProductoId" = p."Id" AND i."EsPrincipal" = TRUE AND i."Eliminado" = FALSE
                           ORDER BY i."Posicion", i."Id" LIMIT 1) img ON TRUE
+            LEFT JOIN LATERAL (SELECT round(avg(r."Calificacion")::numeric, 1) AS promedio, count(*) AS cantidad
+                               FROM "ResenasProducto" r
+                               WHERE r."ProductoId" = p."Id" AND r."Eliminado" = FALSE AND r."Oculta" = FALSE) rating ON TRUE
             """;
 
     public List<ProductoMercado> productos(FiltroProductosMercado f) {
@@ -95,7 +100,8 @@ public class MercadoRepositorio {
                             WHERE v2."ProductoId" = p."Id" AND v2."Eliminado" = FALSE
                               AND (inv."RastreaInventario" = FALSE OR inv."PermitirVentaSinStock" = TRUE
                                    OR inv."CantidadDisponible" - inv."CantidadReservada" > 0))) AS hay_stock,
-                       t."Nombre" AS tienda_nombre, t."Subdominio" AS tienda_subdominio, t."UrlLogo" AS tienda_logo_url
+                       t."Nombre" AS tienda_nombre, t."Subdominio" AS tienda_subdominio, t."UrlLogo" AS tienda_logo_url,
+                       rating.promedio AS calificacion_promedio, rating.cantidad AS cantidad_resenas
                 """ + DESDE_PRODUCTOS + " WHERE " + donde
                 + " ORDER BY " + f.orden().sql() + " LIMIT :limite OFFSET :desplazamiento";
         return jdbc.query(sql, parametros, FILA_PRODUCTO);

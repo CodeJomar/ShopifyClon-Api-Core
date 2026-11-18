@@ -107,8 +107,9 @@ public class MercadoServicio {
         return switch (orden.strip().toLowerCase(Locale.ROOT)) {
             case "precio_asc" -> OrdenProductos.PRECIO_ASC;
             case "precio_desc" -> OrdenProductos.PRECIO_DESC;
+            case "mejor_calificados" -> OrdenProductos.MEJOR_CALIFICADOS;
             default -> throw new SolicitudInvalidaException("VAL-003",
-                    "El orden debe ser recientes, precio_asc o precio_desc");
+                    "El orden debe ser recientes, precio_asc, precio_desc o mejor_calificados");
         };
     }
 
@@ -133,7 +134,8 @@ public class MercadoServicio {
     private static ProductoMercadoResponse aProducto(ProductoMercado p) {
         return new ProductoMercadoResponse(p.id(), p.titulo(), p.identificadorUrl(), p.precioDesde(), p.precioComparacionDesde(),
                 p.moneda(), p.imagenUrl(), p.esDigital(), p.hayStock(),
-                new TiendaResumen(p.tiendaNombre(), p.tiendaSubdominio(), p.tiendaLogoUrl()));
+                new TiendaResumen(p.tiendaNombre(), p.tiendaSubdominio(), p.tiendaLogoUrl()),
+                p.calificacionPromedio(), p.cantidadResenas());
     }
 
     private static TiendaMercadoResponse aTienda(TiendaMercado t) {

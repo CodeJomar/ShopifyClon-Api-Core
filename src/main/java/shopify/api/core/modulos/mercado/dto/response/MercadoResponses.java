@@ -24,7 +24,9 @@ public final class MercadoResponses {
             String imagenUrl,
             boolean esDigital,
             boolean hayStock,
-            TiendaResumen tienda) {
+            TiendaResumen tienda,
+            BigDecimal calificacionPromedio,
+            long cantidadResenas) {
     }
 
     public record TiendaMercadoResponse(

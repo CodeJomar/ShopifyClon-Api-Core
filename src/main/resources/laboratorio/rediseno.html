@@ -74,6 +74,17 @@
         ]
       },
       {
+        id: 'resenas', metodo: 'GET', ruta: '/vitrina/{subdominio}/productos/{slug}/resenas', titulo: 'Reseñas y calificaciones', acceso: 'lectura pública; escribir con sesión',
+        sirve: 'Una reseña por persona y producto (1 a 5 estrellas y comentario). Solo reseña quien compró y pagó el producto (`RES-001`), no quien trabaja en la tienda (`RES-002`); la segunda es `RES-003`.',
+        notas: ['Los campos nulos se omiten del JSON: sin sesión no viene `mi_resena`, y un producto sin reseñas no trae `promedio`.', 'Moderación: `POST /plataforma/resenas/{id}/ocultar` con permiso de auditoría.'],
+        casos: [
+          { titulo: 'Reseñas de un producto', tipo: 'ok', necesita: ['subdominio'], campos: [{ k: 'slug', etiqueta: 'Identificador del producto', valor: '' }], peticion: function (c) { return G('/vitrina/' + c.e.obtener('subdominio') + '/productos/' + c.v.slug + '/resenas'); }, espera: { estado: [200, 404] } },
+          { titulo: 'Orden inválido', tipo: 'validacion', necesita: ['subdominio'], campos: [{ k: 'slug', etiqueta: 'Identificador del producto', valor: '' }], peticion: function (c) { return G('/vitrina/' + c.e.obtener('subdominio') + '/productos/' + c.v.slug + '/resenas', { orden: 'raro' }); }, espera: { estado: [400, 404] } },
+          { titulo: 'Reseñar sin sesión', tipo: 'seguridad', necesita: ['subdominio'], campos: [{ k: 'slug', etiqueta: 'Identificador del producto', valor: '' }], peticion: function (c) { return { metodo: 'POST', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/productos/' + c.v.slug + '/resenas', sesion: false, cuerpo: { calificacion: 5 } }; }, espera: { estado: [401, 404] } },
+          { titulo: 'Calificación fuera de rango', tipo: 'validacion', necesita: ['subdominio'], campos: [{ k: 'slug', etiqueta: 'Identificador del producto', valor: '' }], peticion: function (c) { return { metodo: 'POST', ruta: '/vitrina/' + c.e.obtener('subdominio') + '/productos/' + c.v.slug + '/resenas', cuerpo: { calificacion: 9 } }; }, espera: { estado: [422, 404] } }
+        ]
+      },
+      {
         id: 'propietario', metodo: 'GET', ruta: '/propietario/resumen', titulo: 'Panel general del propietario', acceso: 'sesión',
         sirve: 'Ventas, saldo, suscripción y alertas de todas las tiendas propias, con totales por moneda. No necesita tienda activa.',
         casos: [

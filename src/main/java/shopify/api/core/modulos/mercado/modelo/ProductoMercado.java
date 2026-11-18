@@ -16,5 +16,7 @@ public record ProductoMercado(
         boolean hayStock,
         String tiendaNombre,
         String tiendaSubdominio,
-        String tiendaLogoUrl) {
+        String tiendaLogoUrl,
+        BigDecimal calificacionPromedio,
+        long cantidadResenas) {
 }
