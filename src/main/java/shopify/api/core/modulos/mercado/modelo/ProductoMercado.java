@@ -18,5 +18,7 @@ public record ProductoMercado(
         String tiendaSubdominio,
         String tiendaLogoUrl,
         BigDecimal calificacionPromedio,
-        long cantidadResenas) {
+        long cantidadResenas,
+        String descripcion,
+        long cantidadVariantes) {
 }

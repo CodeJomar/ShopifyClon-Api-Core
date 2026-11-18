@@ -50,7 +50,7 @@ class SemillaDemoTest extends PruebaIntegracionBase {
 
         assertThat(tras1.get("cuentas")).isEqualTo(4);
         assertThat(tras1.get("tiendas")).isEqualTo(6);
-        assertThat(tras1.get("productos")).isEqualTo(36);
+        assertThat(tras1.get("productos")).isEqualTo(38);
         assertThat(tras1.get("tarifas")).isEqualTo(12);
         assertThat(tras1.get("pedidos")).isGreaterThanOrEqualTo(5);
         assertThat(tras1.get("resenas")).isEqualTo(36);
@@ -70,13 +70,58 @@ class SemillaDemoTest extends PruebaIntegracionBase {
         for (String subdominio : SUBDOMINIOS) {
             JsonNode productos = cuerpo(getConToken("/mercado/productos?tienda=" + subdominio, null, null).andExpect(status().isOk()))
                     .get("datos");
-            assertThat(productos.get("total").asInt()).isEqualTo(6);
+            assertThat(productos.get("total").asInt()).isEqualTo(List.of("cafe-andino", "taller-textil-cusco").contains(subdominio) ? 7 : 6);
             getConToken("/mercado/tiendas/" + subdominio, null, null).andExpect(status().isOk());
         }
         JsonNode conEstrellas = cuerpo(getConToken("/mercado/productos?tienda=cafe-andino&orden=mejor_calificados", null, null)
                 .andExpect(status().isOk())).get("datos").get("datos").get(0);
         assertThat(conEstrellas.get("calificacion_promedio").decimalValue().doubleValue()).isBetween(3.0, 5.0);
         assertThat(conEstrellas.get("cantidad_resenas").asInt()).isEqualTo(3);
+    }
+
+    @Test
+    void lasVariantesYLasFotosDeEjemploSeVenEnLaTarjetaYElDetalle() throws Exception {
+        semilla.ejecutar(CLAVE, "admin.demo@otemu.test");
+
+        JsonNode tarjetas = cuerpo(getConToken("/mercado/productos?tienda=taller-textil-cusco", null, null).andExpect(status().isOk()))
+                .get("datos").get("datos");
+        JsonNode polo = null;
+        for (JsonNode t : tarjetas) {
+            if (t.get("identificador_url").asText().equals("polo-de-algodon-pima")) {
+                polo = t;
+            }
+        }
+        assertThat(polo).isNotNull();
+        assertThat(polo.get("cantidad_variantes").asInt()).isEqualTo(12);
+        assertThat(polo.get("variantes_resumen")).hasSize(3);
+        assertThat(polo.get("variantes_resumen").get(0).get("titulo").asText()).isEqualTo("Blanco / S");
+        assertThat(polo.get("descripcion_corta").asText().length()).isLessThanOrEqualTo(110);
+
+        JsonNode detalle = cuerpo(getConToken("/vitrina/taller-textil-cusco/productos/polo-de-algodon-pima", null, null)
+                .andExpect(status().isOk())).get("datos");
+        assertThat(detalle.get("variantes")).hasSize(12);
+        assertThat(detalle.get("imagenes")).hasSize(3);
+        long asociadas = 0;
+        for (JsonNode imagen : detalle.get("imagenes")) {
+            asociadas += imagen.has("variante_id") ? 1 : 0;
+        }
+        assertThat(asociadas).isEqualTo(2);
+
+        JsonNode taza = cuerpo(getConToken("/vitrina/cafe-andino/productos/taza-de-ceramica-artesanal", null, null)
+                .andExpect(status().isOk())).get("datos");
+        assertThat(taza.get("variantes")).hasSize(3);
+        assertThat(taza.get("imagenes")).hasSize(3);
+
+        JsonNode buds = cuerpo(getConToken("/vitrina/neo-gadgets/productos/audifonos-inalambricos-neo-buds", null, null)
+                .andExpect(status().isOk())).get("datos");
+        boolean agotada = false;
+        boolean conComparacion = false;
+        for (JsonNode v : buds.get("variantes")) {
+            agotada |= !v.get("disponible").asBoolean();
+            conComparacion |= v.has("precio_comparacion");
+        }
+        assertThat(agotada).isTrue();
+        assertThat(conComparacion).isTrue();
     }
 
     @Test

@@ -2,8 +2,12 @@ package shopify.api.core.modulos.mercado.servicio;
 
 import java.math.BigDecimal;
 import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -11,6 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
+import shopify.api.core.comun.util.DescripcionCorta;
 import shopify.api.core.comun.excepcion.SolicitudInvalidaException;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.CategoriaMercadoResponse;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.DestacadosMercadoResponse;
@@ -19,6 +24,7 @@ import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.ResumenMer
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.TiendaMercadoDetalleResponse;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.TiendaMercadoResponse;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.TiendaResumen;
+import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.VarianteResumen;
 import shopify.api.core.modulos.mercado.modelo.CategoriaMercado;
 import shopify.api.core.modulos.mercado.modelo.FiltroProductosMercado;
 import shopify.api.core.modulos.mercado.modelo.FiltroProductosMercado.OrdenProductos;
@@ -53,7 +59,7 @@ public class MercadoServicio {
         FiltroProductosMercado filtro = new FiltroProductosMercado(
                 patronDeBusqueda(texto), vacioANulo(categoria), vacioANulo(tienda), precioMin, precioMax,
                 ordenDe(orden), cuantos, numero * cuantos);
-        List<ProductoMercadoResponse> filas = repositorio.productos(filtro).stream().map(MercadoServicio::aProducto).toList();
+        List<ProductoMercadoResponse> filas = aProductos(repositorio.productos(filtro));
         return new PageImpl<>(filas, PageRequest.of(numero, cuantos), repositorio.contarProductos(filtro));
     }
 
@@ -93,7 +99,7 @@ public class MercadoServicio {
                 .map(MercadoServicio::aTienda).toList();
         FiltroProductosMercado recientes = new FiltroProductosMercado(null, null, null, null, null,
                 OrdenProductos.RECIENTES, PRODUCTOS_DESTACADOS, 0);
-        List<ProductoMercadoResponse> productos = repositorio.productos(recientes).stream().map(MercadoServicio::aProducto).toList();
+        List<ProductoMercadoResponse> productos = aProductos(repositorio.productos(recientes));
         return new DestacadosMercadoResponse(tiendas, productos,
                 new ResumenMercado(repositorio.contarTiendas(null), repositorio.contarProductosVisibles()));
     }
@@ -131,11 +137,29 @@ public class MercadoServicio {
         return texto == null || texto.isBlank() ? null : texto.strip();
     }
 
-    private static ProductoMercadoResponse aProducto(ProductoMercado p) {
+    /** Arma las tarjetas con una sola consulta extra para las primeras variantes de todos los productos de la página. */
+    private List<ProductoMercadoResponse> aProductos(List<ProductoMercado> productos) {
+        Map<UUID, List<VarianteResumen>> variantes = new HashMap<>();
+        for (Map<String, Object> fila : repositorio.primerasVariantes(productos.stream().map(ProductoMercado::id).toList())) {
+            variantes.computeIfAbsent((UUID) fila.get("producto"), k -> new ArrayList<>())
+                    .add(new VarianteResumen((String) fila.get("titulo"), (BigDecimal) fila.get("precio")));
+        }
+        return productos.stream().map(p -> aProducto(p, resumen(p, variantes.getOrDefault(p.id(), List.of())))).toList();
+    }
+
+    /** Una sola variante «por defecto» no es una opción que mostrar: el resumen queda vacío. */
+    private static List<VarianteResumen> resumen(ProductoMercado p, List<VarianteResumen> primeras) {
+        boolean soloPorDefecto = p.cantidadVariantes() <= 1
+                && primeras.stream().allMatch(v -> v.titulo() == null || List.of("por defecto", "predeterminada")
+                        .contains(v.titulo().strip().toLowerCase(Locale.ROOT)));
+        return soloPorDefecto ? List.of() : primeras;
+    }
+
+    private static ProductoMercadoResponse aProducto(ProductoMercado p, List<VarianteResumen> variantes) {
         return new ProductoMercadoResponse(p.id(), p.titulo(), p.identificadorUrl(), p.precioDesde(), p.precioComparacionDesde(),
                 p.moneda(), p.imagenUrl(), p.esDigital(), p.hayStock(),
                 new TiendaResumen(p.tiendaNombre(), p.tiendaSubdominio(), p.tiendaLogoUrl()),
-                p.calificacionPromedio(), p.cantidadResenas());
+                p.calificacionPromedio(), p.cantidadResenas(), DescripcionCorta.de(p.descripcion()), variantes, p.cantidadVariantes());
     }
 
     private static TiendaMercadoResponse aTienda(TiendaMercado t) {

@@ -29,6 +29,7 @@ import shopify.api.core.modulos.catalogo.repositorio.ProductoRepositorio;
 import shopify.api.core.modulos.catalogo.repositorio.VarianteProductoRepositorio;
 import shopify.api.core.modulos.inventario.modelo.Disponibilidad;
 import shopify.api.core.modulos.inventario.servicio.InventarioServicio;
+import shopify.api.core.comun.util.DescripcionCorta;
 import shopify.api.core.modulos.resena.dto.response.ResenaResponses.Calificacion;
 import shopify.api.core.modulos.resena.servicio.ResenaServicio;
 import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
@@ -89,7 +90,8 @@ public class VitrinaCatalogoServicio {
                     barata.getPrecio(), barata.getPrecioComparacion(), principales.get(producto.getId()),
                     disponible(disponibilidad, barata.getId()),
                     calificaciones.containsKey(producto.getId()) ? calificaciones.get(producto.getId()).promedio() : null,
-                    calificaciones.containsKey(producto.getId()) ? calificaciones.get(producto.getId()).cantidad() : 0L));
+                    calificaciones.containsKey(producto.getId()) ? calificaciones.get(producto.getId()).cantidad() : 0L,
+                    DescripcionCorta.de(producto.getDescripcion()), resumenVariantes(vs), vs.size()));
         }
         resumenes.sort(comparador);
 
@@ -159,6 +161,17 @@ public class VitrinaCatalogoServicio {
             default -> throw new SolicitudInvalidaException("VAL-003",
                     "El parámetro «orden» debe ser recientes, precio_asc, precio_desc o mejor_calificados");
         };
+    }
+
+    /** Hasta tres variantes en el orden en que se definieron; una sola «por defecto» no es una opción que mostrar. */
+    private static List<VitrinaResponses.VarianteResumen> resumenVariantes(List<VarianteProductoEntidad> variantes) {
+        List<VarianteProductoEntidad> ordenadas = variantes.stream()
+                .sorted(Comparator.comparing(VarianteProductoEntidad::getFechaCreacion)).toList();
+        if (ordenadas.size() == 1 && List.of("por defecto", "predeterminada")
+                .contains(ordenadas.get(0).getTitulo().strip().toLowerCase(Locale.ROOT))) {
+            return List.of();
+        }
+        return ordenadas.stream().limit(3).map(v -> new VitrinaResponses.VarianteResumen(v.getTitulo(), v.getPrecio())).toList();
     }
 
     private Map<UUID, List<VarianteProductoEntidad>> variantesPorProducto(List<ProductoEntidad> candidatos) {

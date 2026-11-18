@@ -24,7 +24,14 @@ public final class VitrinaResponses {
             String imagenPrincipal,
             boolean disponible,
             BigDecimal calificacionPromedio,
-            long cantidadResenas) {
+            long cantidadResenas,
+            String descripcionCorta,
+            List<VarianteResumen> variantesResumen,
+            long cantidadVariantes) {
+    }
+
+    /** Variante en la tarjeta: su título («Negro / M») y su precio. */
+    public record VarianteResumen(String titulo, BigDecimal precio) {
     }
 
     public record ProductoDetalle(

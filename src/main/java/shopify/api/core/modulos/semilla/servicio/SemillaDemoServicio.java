@@ -30,8 +30,10 @@ import shopify.api.core.modulos.orden.modelo.NuevoPedido;
 import shopify.api.core.modulos.orden.modelo.PasarelaPago;
 import shopify.api.core.modulos.orden.servicio.OrdenServicio;
 import shopify.api.core.modulos.orden.servicio.PedidoServicio;
+import shopify.api.core.modulos.semilla.servicio.DatosDemo.FotoDemo;
 import shopify.api.core.modulos.semilla.servicio.DatosDemo.ProductoDemo;
 import shopify.api.core.modulos.semilla.servicio.DatosDemo.TiendaDemo;
+import shopify.api.core.modulos.semilla.servicio.DatosDemo.VarianteDemo;
 import shopify.api.core.modulos.suscripcion.servicio.SuscripcionServicio;
 import shopify.api.core.modulos.tienda.modelo.ConfiguracionVenta;
 import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
@@ -232,22 +234,53 @@ public class SemillaDemoServicio {
                 demo.titulo(), slug, demo.descripcion(), demo.digital());
         jdbc.update("INSERT INTO \"ProductosCategorias\" (\"ProductoId\", \"CategoriaId\") VALUES (?, ?)", productoId, categoriaId);
 
-        List<String> variantes = demo.variantes() == null ? List.of("Por defecto") : demo.variantes();
+        List<VarianteDemo> variantes = variantesDe(demo);
+        Map<String, UUID> idsPorTitulo = new LinkedHashMap<>();
         int indice = 1;
-        for (String titulo : variantes) {
+        for (VarianteDemo variante : variantes) {
             UUID varianteId = jdbc.queryForObject("INSERT INTO \"VariantesProducto\" (\"ProductoId\", \"Titulo\", \"SKU\", \"Precio\", "
-                    + "\"PrecioComparacion\", \"RequiereEnvio\") VALUES (?, ?, ?, ?, ?, ?) RETURNING \"Id\"", UUID.class, productoId, titulo,
+                    + "\"PrecioComparacion\", \"RequiereEnvio\", \"FechaCreacion\") VALUES (?, ?, ?, ?, ?, ?, clock_timestamp()) "
+                    + "RETURNING \"Id\"", UUID.class, productoId,
+                    variante.titulo(),
                     tienda.subdominio().toUpperCase().replace("-", "").substring(0, 4) + "-" + Math.abs(slug.hashCode() % 10000) + "-" + indice++,
-                    demo.precioDecimal(), demo.comparacionDecimal(), !demo.digital());
+                    new BigDecimal(variante.precio()), variante.comparacion() == null ? null : new BigDecimal(variante.comparacion()),
+                    !demo.digital());
             jdbc.update("INSERT INTO \"InventarioVariante\" (\"VarianteId\", \"CantidadDisponible\", \"CantidadReservada\", "
                     + "\"RastreaInventario\", \"PermitirVentaSinStock\") VALUES (?, ?, 0, ?, FALSE)", varianteId,
-                    demo.digital() ? 0 : 60, !demo.digital());
+                    demo.digital() ? 0 : variante.stock(), !demo.digital());
+            idsPorTitulo.put(variante.titulo(), varianteId);
         }
-        for (int i = 1; i <= 2; i++) {
-            jdbc.update("INSERT INTO \"ImagenesProducto\" (\"ProductoId\", \"UrlImagen\", \"TextoAlternativo\", \"EsPrincipal\", \"Posicion\") "
-                    + "VALUES (?, ?, ?, ?, ?)", productoId, "https://picsum.photos/seed/" + slug + "-" + i + "/600/600", demo.titulo(), i == 1, i);
+        List<FotoDemo> fotos = demo.fotos() != null ? demo.fotos() : fotosPorDefecto(demo, tienda);
+        int posicion = 1;
+        for (FotoDemo foto : fotos) {
+            jdbc.update("INSERT INTO \"ImagenesProducto\" (\"ProductoId\", \"UrlImagen\", \"TextoAlternativo\", \"EsPrincipal\", \"Posicion\", "
+                    + "\"VarianteId\") VALUES (?, ?, ?, ?, ?, ?)", productoId, foto.url(),
+                    foto.variante() == null ? demo.titulo() : demo.titulo() + " (" + foto.variante() + ")", posicion == 1, posicion,
+                    foto.variante() == null ? null : idsPorTitulo.get(foto.variante()));
+            posicion++;
         }
         contador.creado("productos");
+    }
+
+    /** Variantes de un producto: las definidas una por una o, si no, las del título con precio y stock comunes. */
+    private static List<VarianteDemo> variantesDe(ProductoDemo demo) {
+        if (demo.detalle() != null) {
+            return demo.detalle();
+        }
+        int stock = demo.digital() ? 0 : 60;
+        List<String> titulos = demo.variantes() == null ? List.of("Por defecto") : demo.variantes();
+        return titulos.stream().map(t -> new VarianteDemo(t, demo.precio(), demo.comparacion(), stock)).toList();
+    }
+
+    /** Dos imágenes que siempre cargan: un bloque de color con el nombre del producto (placehold.co). */
+    private static List<FotoDemo> fotosPorDefecto(ProductoDemo demo, TiendaDemo tienda) {
+        String[] fondos = {"6f4e37", "c8a96a", "8a5a44", "1f3a5f", "3f6b4f", "5b4b8a"};
+        int indice = DatosDemo.TIENDAS.indexOf(tienda);
+        String fondo = fondos[Math.floorMod(indice, fondos.length)];
+        String texto = java.net.URLEncoder.encode(demo.titulo(), StandardCharsets.UTF_8);
+        return List.of(
+                new FotoDemo("https://placehold.co/800x800/" + fondo + "/ffffff/png?text=" + texto, null),
+                new FotoDemo("https://placehold.co/800x800/f4efe6/" + fondo + "/png?text=" + texto, null));
     }
 
     private void tarifa(UUID tiendaId, String nombre, String precio, String gratisDesde, int orden, Contador contador) {

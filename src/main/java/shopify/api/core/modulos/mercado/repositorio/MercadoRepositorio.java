@@ -1,6 +1,8 @@
 package shopify.api.core.modulos.mercado.repositorio;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +57,9 @@ public class MercadoRepositorio {
             rs.getString("tienda_subdominio"),
             rs.getString("tienda_logo_url"),
             rs.getBigDecimal("calificacion_promedio"),
-            rs.getLong("cantidad_resenas"));
+            rs.getLong("cantidad_resenas"),
+            rs.getString("descripcion"),
+            rs.getLong("cantidad_variantes"));
 
     private static final RowMapper<TiendaMercado> FILA_TIENDA = (rs, fila) -> new TiendaMercado(
             rs.getString("nombre"),
@@ -101,10 +105,26 @@ public class MercadoRepositorio {
                               AND (inv."RastreaInventario" = FALSE OR inv."PermitirVentaSinStock" = TRUE
                                    OR inv."CantidadDisponible" - inv."CantidadReservada" > 0))) AS hay_stock,
                        t."Nombre" AS tienda_nombre, t."Subdominio" AS tienda_subdominio, t."UrlLogo" AS tienda_logo_url,
-                       rating.promedio AS calificacion_promedio, rating.cantidad AS cantidad_resenas
+                       rating.promedio AS calificacion_promedio, rating.cantidad AS cantidad_resenas,
+                       p."Descripcion" AS descripcion,
+                       (SELECT count(*) FROM "VariantesProducto" v3 WHERE v3."ProductoId" = p."Id" AND v3."Eliminado" = FALSE) AS cantidad_variantes
                 """ + DESDE_PRODUCTOS + " WHERE " + donde
                 + " ORDER BY " + f.orden().sql() + " LIMIT :limite OFFSET :desplazamiento";
         return jdbc.query(sql, parametros, FILA_PRODUCTO);
+    }
+
+    /** Hasta tres variantes por producto, en el orden en que se definieron (titulo y precio). */
+    public List<Map<String, Object>> primerasVariantes(Collection<UUID> productoIds) {
+        if (productoIds.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.queryForList("""
+                SELECT x."ProductoId" AS producto, x."Titulo" AS titulo, x."Precio" AS precio FROM (
+                    SELECT v."ProductoId", v."Titulo", v."Precio",
+                           row_number() OVER (PARTITION BY v."ProductoId" ORDER BY v."FechaCreacion", v."Id") AS posicion
+                    FROM "VariantesProducto" v WHERE v."ProductoId" IN (:ids) AND v."Eliminado" = FALSE) x
+                WHERE x.posicion <= 3 ORDER BY x."ProductoId", x.posicion
+                """, new MapSqlParameterSource("ids", productoIds));
     }
 
     public long contarProductos(FiltroProductosMercado f) {
