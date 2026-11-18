@@ -365,3 +365,35 @@ ON CONFLICT ("Codigo") DO NOTHING;
 - **Proyecto Académico**: Clon Shopify API Core (Desarrollo Fullstack).
 - **Edición**: 2026.
 - **Licencia**: Apache 2.0. Libre para fines educativos y desarrollo de software.
+
+---
+
+# 7. Datos de demostración (semilla) para una base nueva
+
+Una base nueva (por ejemplo la de Railway) arranca **vacía**: Flyway crea el esquema y los planes, pero no hay tiendas ni una cuenta con la que entrar. La semilla de demostración (R-014) las crea. Es **opcional** y está apagada por omisión.
+
+## Variables
+
+| Variable | Para qué | Notas |
+|---|---|---|
+| `SEMILLA_DEMO` | `true` enciende la semilla al arrancar | Por omisión `false`: nunca corre sola |
+| `SEMILLA_DEMO_CONTRASENA` | Contraseña de **todas** las cuentas demo | Obligatoria (mínimo 8 caracteres). Sin ella la semilla se omite y avisa en el log. Se pone solo en el panel del servidor: nunca en el código, el repositorio ni los logs |
+| `SEMILLA_ADMIN_CORREO` | Correo del administrador demo | Opcional; por omisión `admin.demo@otemu.test` |
+
+## Orden en Railway
+1. Crear la base y configurar las variables `DB_*` de siempre. **No** poner aún las variables de la semilla.
+2. Primer despliegue: Flyway crea el esquema y los planes.
+3. Agregar `SEMILLA_DEMO=true` y `SEMILLA_DEMO_CONTRASENA=<la contraseña>` y volver a desplegar. En el log aparece `Semilla de demostración: creados {…}, omitidos {…}`.
+4. Entrar con `admin.demo@otemu.test` y la contraseña elegida. Quitar `SEMILLA_DEMO` cuando ya no haga falta (no estorba si queda, porque no duplica nada).
+
+## Qué crea
+- **Cuentas activas** (todas con la misma contraseña): `admin.demo@otemu.test` (administrador de plataforma con el rol `ADMIN_PLATAFORMA`), `propietario.demo@otemu.test`, `propietario2.demo@otemu.test` y `comprador.demo@otemu.test`.
+- **Seis tiendas** en soles, visibles en el mercado: Café Andino, Casa Quinua, Taller Textil Cusco, Neo Gadgets, Aroma Selva y Papel y Tinta, con planes variados (dos gratuitas y cuatro de pago).
+- **Seis productos por tienda** con descripción, dos imágenes (`picsum.photos`), stock, categorías, variantes en algunos, un producto digital por tienda y precio de comparación en algunos. Dos tarifas de envío por tienda (estándar, gratis sobre S/ 150, y exprés).
+- **Pedidos de ejemplo** del comprador demo en varios estados (uno de dos tiendas con un pago pendiente, uno pagado, uno preparado, entregados), más una compra entregada por persona y tienda que sustenta las **reseñas** (tres por producto en los dos primeros productos de cada tienda).
+
+## Garantías
+- **Idempotente:** cada pieza se busca por su clave natural (correo, subdominio, identificador del producto, clave del pedido) y se omite si ya existe. Correrla de nuevo, o sobre una base que ya tiene datos de pruebas, no duplica ni borra nada, y nunca cambia la contraseña de una cuenta que ya existía.
+- **Sin efectos externos:** no envía correos y no crea intentos de pago en Stripe; los pagos de ejemplo son manuales.
+- **Dominio respetado:** los pedidos, el inventario, el pago y el balance pasan por los servicios del dominio. Los datos de ejemplo usan dominios `.test` ficticios.
+- Si la semilla falla, se registra el error y la API **sigue arrancando**; se puede reintentar.
