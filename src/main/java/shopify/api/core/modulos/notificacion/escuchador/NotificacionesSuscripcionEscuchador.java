@@ -33,7 +33,7 @@ public class NotificacionesSuscripcionEscuchador {
                 return;
             }
             var mensaje = Plantillas.suscripcionVencida(tienda.nombre(), urlBase + "/panel/suscripcion");
-            correo.enviar(tienda.correoPropietario(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(tienda.correoPropietario(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 
@@ -46,7 +46,7 @@ public class NotificacionesSuscripcionEscuchador {
                 return;
             }
             var mensaje = Plantillas.suscripcionRenovada(tienda.nombre());
-            correo.enviar(tienda.correoPropietario(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(tienda.correoPropietario(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 }

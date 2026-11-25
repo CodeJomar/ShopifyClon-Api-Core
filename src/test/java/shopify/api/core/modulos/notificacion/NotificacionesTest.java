@@ -9,6 +9,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.doThrow;
 
+import static org.mockito.Mockito.when;
+
+import jakarta.mail.BodyPart;
+import jakarta.mail.Multipart;
+import jakarta.mail.Part;
+import jakarta.mail.internet.MimeMessage;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -21,7 +27,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mail.MailSendException;
-import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.transaction.support.TransactionTemplate;
 import shopify.api.core.modulos.envio.evento.EnvioDespachadoEvento;
 import shopify.api.core.modulos.envio.evento.EnvioEntregadoEvento;
@@ -54,6 +60,7 @@ class NotificacionesTest extends PruebaIntegracionBase {
     @BeforeEach
     void preparar() {
         reset(correo);
+        when(correo.createMimeMessage()).thenAnswer(i -> new JavaMailSenderImpl().createMimeMessage());
         tienda = crearTienda(crearUsuarioActivo(false));
         subdominio = jdbc.queryForObject("SELECT \"Subdominio\" FROM \"Tiendas\" WHERE \"Id\" = ?", String.class, tienda);
         correoContacto = jdbc.queryForObject("SELECT \"CorreoContacto\" FROM \"Tiendas\" WHERE \"Id\" = ?", String.class, tienda);
@@ -65,16 +72,17 @@ class NotificacionesTest extends PruebaIntegracionBase {
     void elCodigoDeActivacionLlegaAlUsuarioConSuVigencia() {
         publicarEnTransaccion(new CodigoActivacionEmitidoEvento("nuevo@prueba.test", "Ana", "482913"));
 
-        SimpleMailMessage correo = unCorreo();
+        Correo correo = unCorreo();
         assertThat(correo.getTo()).containsExactly("nuevo@prueba.test");
         assertThat(correo.getText()).contains("482913").contains("24 horas");
+        assertThat(correo.getHtml()).contains("482913").contains("OTemu");
     }
 
     @Test
     void elCodigoDeRecuperacionLlegaAlUsuarioConSuVigencia() {
         publicarEnTransaccion(new CodigoRecuperacionEmitidoEvento("olvido@prueba.test", "Luis", "551204"));
 
-        SimpleMailMessage correo = unCorreo();
+        Correo correo = unCorreo();
         assertThat(correo.getTo()).containsExactly("olvido@prueba.test");
         assertThat(correo.getText()).contains("551204").contains("30 minutos");
     }
@@ -87,10 +95,10 @@ class NotificacionesTest extends PruebaIntegracionBase {
 
         publicarEnTransaccion(new OrdenCreadaEvento(tienda, orden, "#1001"));
 
-        List<SimpleMailMessage> correos = correos(2);
-        SimpleMailMessage alComprador = correos.stream().filter(m -> m.getTo()[0].equals("comprador@prueba.test")).findFirst().orElseThrow();
+        List<Correo> correos = correos(2);
+        Correo alComprador = correos.stream().filter(m -> m.getTo()[0].equals("comprador@prueba.test")).findFirst().orElseThrow();
         assertThat(alComprador.getText()).contains("#1001").contains("/" + subdominio + "/ordenes/ab12cd34token");
-        SimpleMailMessage alaTienda = correos.stream().filter(m -> m.getTo()[0].equals(correoContacto)).findFirst().orElseThrow();
+        Correo alaTienda = correos.stream().filter(m -> m.getTo()[0].equals(correoContacto)).findFirst().orElseThrow();
         assertThat(alaTienda.getSubject()).contains("Nueva orden #1001");
     }
 
@@ -100,7 +108,7 @@ class NotificacionesTest extends PruebaIntegracionBase {
 
         publicarEnTransaccion(new OrdenPagadaEvento(tienda, orden));
 
-        SimpleMailMessage correo = unCorreo();
+        Correo correo = unCorreo();
         assertThat(correo.getTo()).containsExactly("comprador@prueba.test");
         assertThat(correo.getSubject()).contains("Pago confirmado").contains("#1002");
     }
@@ -111,7 +119,7 @@ class NotificacionesTest extends PruebaIntegracionBase {
 
         publicarEnTransaccion(new OrdenCanceladaEvento(tienda, orden, "CLIENTE"));
 
-        SimpleMailMessage correo = unCorreo();
+        Correo correo = unCorreo();
         assertThat(correo.getTo()).containsExactly("comprador@prueba.test");
         assertThat(correo.getText()).contains("tu solicitud");
     }
@@ -125,7 +133,7 @@ class NotificacionesTest extends PruebaIntegracionBase {
 
         publicarEnTransaccion(new EnvioDespachadoEvento(tienda, envio, orden));
 
-        SimpleMailMessage correo = unCorreo();
+        Correo correo = unCorreo();
         assertThat(correo.getTo()).containsExactly("comprador@prueba.test");
         assertThat(correo.getText()).contains("DHL").contains("GUIA-998").contains("https://seguimiento.test/998");
     }
@@ -137,7 +145,7 @@ class NotificacionesTest extends PruebaIntegracionBase {
 
         publicarEnTransaccion(new EnvioEntregadoEvento(tienda, envio, orden));
 
-        SimpleMailMessage correo = unCorreo();
+        Correo correo = unCorreo();
         assertThat(correo.getTo()).containsExactly("comprador@prueba.test");
         assertThat(correo.getSubject()).contains("fue entregada").contains("#1005");
     }
@@ -148,7 +156,7 @@ class NotificacionesTest extends PruebaIntegracionBase {
     void unaSuscripcionVencidaAvisaAlPropietario() {
         publicarEnTransaccion(new SuscripcionVencidaEvento(tienda));
 
-        SimpleMailMessage correo = unCorreo();
+        Correo correo = unCorreo();
         assertThat(correo.getTo()).containsExactly(correoDelPropietario());
         assertThat(correo.getSubject()).contains("venció");
     }
@@ -157,7 +165,7 @@ class NotificacionesTest extends PruebaIntegracionBase {
     void unaSuscripcionRenovadaAvisaAlPropietario() {
         publicarEnTransaccion(new SuscripcionRenovadaEvento(tienda));
 
-        SimpleMailMessage correo = unCorreo();
+        Correo correo = unCorreo();
         assertThat(correo.getTo()).containsExactly(correoDelPropietario());
         assertThat(correo.getSubject()).contains("se renovó");
     }
@@ -172,17 +180,17 @@ class NotificacionesTest extends PruebaIntegracionBase {
                     throw new IllegalStateException("la operación falla después de publicar");
                 }));
 
-        verify(correo, never()).send(any(SimpleMailMessage.class));
+        verify(correo, never()).send(any(MimeMessage.class));
     }
 
     @Test
     void unFalloDelCorreoNoRompeLaOperacionQueLoPublicoYSeRegistraUnaAdvertencia(CapturedOutput salida) {
-        doThrow(new MailSendException("servidor de correo caído")).when(correo).send(any(SimpleMailMessage.class));
+        doThrow(new MailSendException("servidor de correo caído")).when(correo).send(any(MimeMessage.class));
 
         assertThatCode(() -> transaccion.executeWithoutResult(
                 estado -> publicador.publishEvent(new CodigoActivacionEmitidoEvento("nuevo@prueba.test", "Ana", "333444"))))
                 .doesNotThrowAnyException();
-        verify(correo, times(1)).send(any(SimpleMailMessage.class));
+        verify(correo, times(1)).send(any(MimeMessage.class));
         assertThat(salida.getAll()).contains("No se pudo enviar el correo de activación");
     }
 
@@ -196,18 +204,52 @@ class NotificacionesTest extends PruebaIntegracionBase {
 
     // ---- ayudas ----
 
+    /** Correo ya armado, leído desde el mensaje MIME que recibió el servidor: asunto, destinatario y las dos versiones. */
+    record Correo(String[] getTo, String getSubject, String getText, String getHtml) {
+        @Override
+        public String[] getTo() {
+            return getTo;
+        }
+
+        static Correo de(MimeMessage mime) {
+            try {
+                String[] para = {mime.getAllRecipients()[0].toString()};
+                mime.saveChanges();
+                String[] partes = {"", ""};
+                recoger(mime, partes);
+                return new Correo(para, mime.getSubject(), partes[0], partes[1]);
+            } catch (Exception ex) {
+                throw new IllegalStateException(ex);
+            }
+        }
+
+        private static void recoger(Part parte, String[] salida) throws Exception {
+            Object contenido = parte.getContent();
+            if (contenido instanceof Multipart multi) {
+                for (int i = 0; i < multi.getCount(); i++) {
+                    BodyPart hija = multi.getBodyPart(i);
+                    recoger(hija, salida);
+                }
+            } else if (parte.isMimeType("text/html")) {
+                salida[1] += contenido;
+            } else if (parte.isMimeType("text/plain")) {
+                salida[0] += contenido;
+            }
+        }
+    }
+
     private void publicarEnTransaccion(Object evento) {
         transaccion.executeWithoutResult(estado -> publicador.publishEvent(evento));
     }
 
-    private SimpleMailMessage unCorreo() {
+    private Correo unCorreo() {
         return correos(1).get(0);
     }
 
-    private List<SimpleMailMessage> correos(int esperados) {
-        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
+    private List<Correo> correos(int esperados) {
+        ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(correo, times(esperados)).send(captor.capture());
-        return captor.getAllValues();
+        return captor.getAllValues().stream().map(Correo::de).toList();
     }
 
     private String correoDelPropietario() {

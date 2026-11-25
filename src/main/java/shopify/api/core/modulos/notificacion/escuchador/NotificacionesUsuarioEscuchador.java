@@ -26,7 +26,7 @@ public class NotificacionesUsuarioEscuchador {
     public void alEmitirCodigoActivacion(CodigoActivacionEmitidoEvento evento) {
         enviarSeguro("activación", () -> {
             var mensaje = Plantillas.activacion(evento.nombres(), evento.codigo());
-            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 
@@ -35,7 +35,7 @@ public class NotificacionesUsuarioEscuchador {
     public void alEmitirCodigoRecuperacion(CodigoRecuperacionEmitidoEvento evento) {
         enviarSeguro("recuperación", () -> {
             var mensaje = Plantillas.recuperacion(evento.nombres(), evento.codigo());
-            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 
@@ -44,7 +44,7 @@ public class NotificacionesUsuarioEscuchador {
     public void alBloquearCuenta(CuentaBloqueadaEvento evento) {
         enviarSeguro("cuenta bloqueada", () -> {
             var mensaje = Plantillas.cuentaBloqueada(evento.nombres(), evento.codigo(), evento.minutosBloqueo());
-            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 
@@ -53,7 +53,7 @@ public class NotificacionesUsuarioEscuchador {
     public void alEmitirCodigoSegundoFactor(CodigoSegundoFactorEmitidoEvento evento) {
         enviarSeguro("segundo factor", () -> {
             var mensaje = Plantillas.segundoFactor(evento.nombres(), evento.codigo());
-            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 

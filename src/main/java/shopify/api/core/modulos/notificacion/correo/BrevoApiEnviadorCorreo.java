@@ -1,5 +1,6 @@
 package shopify.api.core.modulos.notificacion.correo;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,7 @@ public class BrevoApiEnviadorCorreo implements EnviadorCorreo {
 
     @Autowired
     public BrevoApiEnviadorCorreo(@Value("${app.correo.habilitado:true}") boolean habilitado,
-                                  @Value("${app.correo.remitente:no-responder@shopifyclon.test}") String remitente,
+                                  @Value("${app.correo.remitente:no-responder@otemu.test}") String remitente,
                                   @Value("${app.correo.brevo.api-key:}") String claveApi) {
         this(RestClient.create(), habilitado, remitente, claveApi);
     }
@@ -41,7 +42,7 @@ public class BrevoApiEnviadorCorreo implements EnviadorCorreo {
     }
 
     @Override
-    public void enviar(String para, String asunto, String texto) {
+    public void enviar(String para, String asunto, String texto, String html) {
         if (!habilitado) {
             log.info("Correo omitido: el envío de correos está deshabilitado");
             return;
@@ -49,11 +50,14 @@ public class BrevoApiEnviadorCorreo implements EnviadorCorreo {
         if (claveApi == null || claveApi.isBlank()) {
             throw new IllegalStateException("Falta app.correo.brevo.api-key (BREVO_API_KEY)");
         }
-        Map<String, Object> cuerpo = Map.of(
-                "sender", Map.of("email", remitente, "name", "OTemu"),
-                "to", List.of(Map.of("email", para)),
-                "subject", asunto,
-                "textContent", texto);
+        Map<String, Object> cuerpo = new HashMap<>();
+        cuerpo.put("sender", Map.of("email", remitente, "name", "OTemu"));
+        cuerpo.put("to", List.of(Map.of("email", para)));
+        cuerpo.put("subject", asunto);
+        cuerpo.put("textContent", texto);
+        if (html != null) {
+            cuerpo.put("htmlContent", html);
+        }
         cliente.post().uri(URL)
                 .header("api-key", claveApi)
                 .header("accept", "application/json")

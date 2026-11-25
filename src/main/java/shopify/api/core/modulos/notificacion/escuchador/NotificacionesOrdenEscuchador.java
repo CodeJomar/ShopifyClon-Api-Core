@@ -37,11 +37,11 @@ public class NotificacionesOrdenEscuchador {
             String enlace = urlBase + "/" + tienda.subdominio() + "/ordenes/" + orden.tokenAcceso();
             var alComprador = Plantillas.ordenCreadaComprador(orden.numeroOrden(), orden.nombreCliente(), orden.total(),
                     tienda.moneda(), enlace);
-            correo.enviar(orden.correoCliente(), alComprador.asunto(), alComprador.texto());
+            correo.enviar(orden.correoCliente(), alComprador.asunto(), alComprador.texto(), alComprador.html());
             if (tienda.correoContacto() != null) {
                 var alaTienda = Plantillas.ordenCreadaTienda(orden.numeroOrden(), tienda.nombre(), orden.total(),
                         tienda.moneda());
-                correo.enviar(tienda.correoContacto(), alaTienda.asunto(), alaTienda.texto());
+                correo.enviar(tienda.correoContacto(), alaTienda.asunto(), alaTienda.texto(), alaTienda.html());
             }
         });
     }
@@ -52,7 +52,7 @@ public class NotificacionesOrdenEscuchador {
         NotificacionesUsuarioEscuchador.enviarSeguro("pago confirmado", () -> {
             DatosNotificacionOrden orden = ordenes.datosNotificacion(evento.ordenId());
             var mensaje = Plantillas.ordenPagada(orden.numeroOrden(), orden.nombreCliente());
-            correo.enviar(orden.correoCliente(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(orden.correoCliente(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 
@@ -62,7 +62,7 @@ public class NotificacionesOrdenEscuchador {
         NotificacionesUsuarioEscuchador.enviarSeguro("orden cancelada", () -> {
             DatosNotificacionOrden orden = ordenes.datosNotificacion(evento.ordenId());
             var mensaje = Plantillas.ordenCancelada(orden.numeroOrden(), orden.nombreCliente(), evento.motivo());
-            correo.enviar(orden.correoCliente(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(orden.correoCliente(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 }

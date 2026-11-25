@@ -30,7 +30,21 @@ class BrevoApiEnviadorCorreoTest {
                 .andRespond(withSuccess("{\"messageId\":\"x\"}", MediaType.APPLICATION_JSON));
 
         new BrevoApiEnviadorCorreo(constructor.build(), true, "remitente@prueba.test", "clave-de-prueba")
-                .enviar("alguien@prueba.test", "Asunto", "Texto");
+                .enviar("alguien@prueba.test", "Asunto", "Texto", "<p>Texto</p>");
+
+        servidor.verify();
+    }
+
+    @Test
+    void sinHtmlMandaSoloElTextoPlano() {
+        RestClient.Builder constructor = RestClient.builder();
+        MockRestServiceServer servidor = MockRestServiceServer.bindTo(constructor).build();
+        servidor.expect(requestTo(BrevoApiEnviadorCorreo.URL))
+                .andExpect(jsonPath("$.textContent").value("Texto"))
+                .andExpect(jsonPath("$.htmlContent").doesNotExist())
+                .andRespond(withSuccess("{\"messageId\":\"x\"}", MediaType.APPLICATION_JSON));
+
+        new BrevoApiEnviadorCorreo(constructor.build(), true, "r@prueba.test", "clave").enviar("a@prueba.test", "A", "Texto");
 
         servidor.verify();
     }

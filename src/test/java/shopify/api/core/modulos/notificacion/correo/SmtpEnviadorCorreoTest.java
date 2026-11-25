@@ -14,10 +14,11 @@ class SmtpEnviadorCorreoTest {
     @Test
     void conElEnvioDeshabilitadoNoSeLlamaAlServidor() {
         JavaMailSender servidor = mock(JavaMailSender.class);
-        SmtpEnviadorCorreo enviador = new SmtpEnviadorCorreo(servidor, false, "no-responder@shopifyclon.test");
+        SmtpEnviadorCorreo enviador = new SmtpEnviadorCorreo(servidor, false, "no-responder@otemu.test");
 
-        enviador.enviar("alguien@prueba.test", "Asunto", "Texto");
+        enviador.enviar("alguien@prueba.test", "Asunto", "Texto", "<p>Texto</p>");
 
         verify(servidor, never()).send(org.mockito.ArgumentMatchers.any(SimpleMailMessage.class));
+        verify(servidor, never()).send(org.mockito.ArgumentMatchers.any(jakarta.mail.internet.MimeMessage.class));
     }
 }

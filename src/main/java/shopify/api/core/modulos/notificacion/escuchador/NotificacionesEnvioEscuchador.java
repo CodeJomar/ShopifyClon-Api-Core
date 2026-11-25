@@ -31,7 +31,7 @@ public class NotificacionesEnvioEscuchador {
             DatosNotificacionOrden orden = ordenes.datosNotificacion(envio.ordenId());
             var mensaje = Plantillas.envioDespachado(orden.numeroOrden(), orden.nombreCliente(), envio.transportista(),
                     envio.numeroGuia(), envio.urlSeguimiento());
-            correo.enviar(orden.correoCliente(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(orden.correoCliente(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 
@@ -42,7 +42,7 @@ public class NotificacionesEnvioEscuchador {
             DatosEnvio envio = envios.datos(evento.envioId());
             DatosNotificacionOrden orden = ordenes.datosNotificacion(envio.ordenId());
             var mensaje = Plantillas.envioEntregado(orden.numeroOrden(), orden.nombreCliente());
-            correo.enviar(orden.correoCliente(), mensaje.asunto(), mensaje.texto());
+            correo.enviar(orden.correoCliente(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
 }
