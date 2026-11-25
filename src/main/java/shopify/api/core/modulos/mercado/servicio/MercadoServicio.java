@@ -13,7 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import shopify.api.core.comun.cache.CacheTemporal;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 import shopify.api.core.comun.util.DescripcionCorta;
 import shopify.api.core.comun.excepcion.SolicitudInvalidaException;
@@ -44,10 +44,17 @@ public class MercadoServicio {
     private static final int PRODUCTOS_DESTACADOS = 12;
 
     private final MercadoRepositorio repositorio;
+    private final CacheTemporal cache;
 
-    @Transactional(readOnly = true)
     public Page<ProductoMercadoResponse> productos(String texto, String categoria, String tienda, BigDecimal precioMin,
                                                    BigDecimal precioMax, String orden, Integer pagina, Integer tamano) {
+        String clave = String.join("|", "mp", String.valueOf(texto), String.valueOf(categoria), String.valueOf(tienda),
+                String.valueOf(precioMin), String.valueOf(precioMax), String.valueOf(orden), String.valueOf(pagina), String.valueOf(tamano));
+        return cache.obtener(clave, () -> calcularProductos(texto, categoria, tienda, precioMin, precioMax, orden, pagina, tamano));
+    }
+
+    private Page<ProductoMercadoResponse> calcularProductos(String texto, String categoria, String tienda, BigDecimal precioMin,
+                                                            BigDecimal precioMax, String orden, Integer pagina, Integer tamano) {
         int numero = pagina == null ? 0 : pagina;
         int cuantos = tamano == null ? TAMANO_POR_DEFECTO : tamano;
         if (numero < 0 || cuantos < 1 || cuantos > TAMANO_MAXIMO) {
@@ -63,8 +70,12 @@ public class MercadoServicio {
         return new PageImpl<>(filas, PageRequest.of(numero, cuantos), repositorio.contarProductos(filtro));
     }
 
-    @Transactional(readOnly = true)
     public Page<TiendaMercadoResponse> tiendas(String texto, Integer pagina, Integer tamano) {
+        return cache.obtener(String.join("|", "mt", String.valueOf(texto), String.valueOf(pagina), String.valueOf(tamano)),
+                () -> calcularTiendas(texto, pagina, tamano));
+    }
+
+    private Page<TiendaMercadoResponse> calcularTiendas(String texto, Integer pagina, Integer tamano) {
         int numero = pagina == null ? 0 : pagina;
         int cuantos = tamano == null ? TAMANO_POR_DEFECTO : tamano;
         if (numero < 0 || cuantos < 1 || cuantos > TAMANO_MAXIMO) {
@@ -77,8 +88,11 @@ public class MercadoServicio {
     }
 
     /** TIE-404: una tienda que no existe, está oculta o no es operativa responde igual. */
-    @Transactional(readOnly = true)
     public TiendaMercadoDetalleResponse tienda(String subdominio) {
+        return cache.obtener("mtd|" + subdominio, () -> calcularTienda(subdominio));
+    }
+
+    private TiendaMercadoDetalleResponse calcularTienda(String subdominio) {
         TiendaMercado tienda = repositorio.tienda(subdominio == null ? "" : subdominio.strip().toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new RecursoNoEncontradoException("TIE-404", "Esta tienda no está disponible"));
         List<CategoriaMercadoResponse> categorias = repositorio.categorias(tienda.subdominio()).stream()
@@ -87,14 +101,16 @@ public class MercadoServicio {
                 tienda.moneda(), tienda.cantidadProductos(), categorias);
     }
 
-    @Transactional(readOnly = true)
     public List<CategoriaMercadoResponse> categorias() {
-        return repositorio.categorias(null).stream().map(MercadoServicio::aCategoria).toList();
+        return cache.obtener("mc", () -> repositorio.categorias(null).stream().map(MercadoServicio::aCategoria).toList());
     }
 
     /** Para la landing: las tiendas más recientes y los productos más recientes, más el total de cada cosa. */
-    @Transactional(readOnly = true)
     public DestacadosMercadoResponse destacados() {
+        return cache.obtener("md", this::calcularDestacados);
+    }
+
+    private DestacadosMercadoResponse calcularDestacados() {
         List<TiendaMercadoResponse> tiendas = repositorio.tiendas(null, true, TIENDAS_DESTACADAS, 0).stream()
                 .map(MercadoServicio::aTienda).toList();
         FiltroProductosMercado recientes = new FiltroProductosMercado(null, null, null, null, null,

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shopify.api.core.comun.dto.ConsultaPaginadaDto;
+import shopify.api.core.comun.cache.CacheTemporal;
 import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.modulos.catalogo.dto.response.VitrinaResponses;
 import shopify.api.core.modulos.catalogo.servicio.VitrinaCatalogoServicio;
@@ -22,11 +23,12 @@ import shopify.api.core.modulos.catalogo.servicio.VitrinaCatalogoServicio;
 public class VitrinaCatalogoControlador {
 
     private final VitrinaCatalogoServicio vitrina;
+    private final CacheTemporal cache;
 
     @Operation(summary = "Categorías con productos publicados")
     @GetMapping("/categorias")
     public ResponseEntity<RespuestaApi<List<VitrinaResponses.Categoria>>> categorias(@PathVariable String subdominio) {
-        return RespuestaApi.ok(vitrina.categorias(subdominio), "Categorías disponibles");
+        return RespuestaApi.ok(cache.obtener("vc|" + subdominio, () -> vitrina.categorias(subdominio)), "Categorías disponibles");
     }
 
     @Operation(summary = "Productos publicados (paginado; texto, categoría y orden)")
@@ -37,13 +39,15 @@ public class VitrinaCatalogoControlador {
             @RequestParam(required = false) String texto,
             @RequestParam(required = false) String categoria,
             @RequestParam(required = false) String orden) {
-        return RespuestaApi.paginado(vitrina.productos(subdominio, pagina, texto, categoria, orden), "Productos");
+        String clave = String.join("|", "vp", subdominio, String.valueOf(pagina), String.valueOf(texto), String.valueOf(categoria),
+                String.valueOf(orden));
+        return RespuestaApi.paginado(cache.obtener(clave, () -> vitrina.productos(subdominio, pagina, texto, categoria, orden)), "Productos");
     }
 
     @Operation(summary = "Detalle de un producto publicado por su identificador")
     @GetMapping("/productos/{slug}")
     public ResponseEntity<RespuestaApi<VitrinaResponses.ProductoDetalle>> detalle(
             @PathVariable String subdominio, @PathVariable String slug) {
-        return RespuestaApi.ok(vitrina.detalle(subdominio, slug), "Producto");
+        return RespuestaApi.ok(cache.obtener("vd|" + subdominio + "|" + slug, () -> vitrina.detalle(subdominio, slug)), "Producto");
     }
 }

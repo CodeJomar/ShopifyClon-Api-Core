@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import shopify.api.core.comun.cache.CacheTemporal;
 import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.modulos.suscripcion.dto.response.PlanResponse;
 import shopify.api.core.modulos.suscripcion.servicio.PlanServicio;
@@ -19,10 +20,11 @@ import shopify.api.core.modulos.suscripcion.servicio.PlanServicio;
 public class PlanControlador {
 
     private final PlanServicio planServicio;
+    private final CacheTemporal cache;
 
     @Operation(summary = "Listar los planes públicos (sin sesión)")
     @GetMapping
     public ResponseEntity<RespuestaApi<List<PlanResponse>>> listar() {
-        return RespuestaApi.ok(planServicio.listarPublicos(), "Planes disponibles");
+        return RespuestaApi.ok(cache.obtener("planes", planServicio::listarPublicos), "Planes disponibles");
     }
 }
