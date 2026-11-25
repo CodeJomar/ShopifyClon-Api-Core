@@ -107,15 +107,17 @@ public class PedidoServicio {
         Map<UUID, List<OrdenEntidad>> hijas = ids.isEmpty() ? Map.of()
                 : ordenes.findByPedidoIdInAndEliminadoFalseOrderByFechaCreacionAscIdAsc(ids).stream()
                         .collect(Collectors.groupingBy(OrdenEntidad::getPedidoId));
-        return pagina0.map(pedido -> resumen(pedido, hijas.getOrDefault(pedido.getId(), List.of())));
+        Map<UUID, List<ItemOrdenResumen>> lineas = lineasDe(hijas.values().stream().flatMap(List::stream).toList());
+        return pagina0.map(pedido -> resumen(pedido, hijas.getOrDefault(pedido.getId(), List.of()), lineas));
     }
 
     private PedidoResumen resumen(PedidoEntidad pedido) {
-        return resumen(pedido, ordenes.findByPedidoIdAndEliminadoFalseOrderByFechaCreacionAscIdAsc(pedido.getId()));
+        List<OrdenEntidad> hijas = ordenes.findByPedidoIdAndEliminadoFalseOrderByFechaCreacionAscIdAsc(pedido.getId());
+        return resumen(pedido, hijas, lineasDe(hijas));
     }
 
-    private PedidoResumen resumen(PedidoEntidad pedido, List<OrdenEntidad> hijas) {
-        List<OrdenDePedido> ordenesDto = hijas.stream().map(this::aOrden).toList();
+    private PedidoResumen resumen(PedidoEntidad pedido, List<OrdenEntidad> hijas, Map<UUID, List<ItemOrdenResumen>> lineas) {
+        List<OrdenDePedido> ordenesDto = hijas.stream().map(o -> aOrden(o, lineas.getOrDefault(o.getId(), List.of()))).toList();
         return new PedidoResumen(pedido.getId(), pedido.getNumeroPedido(), pedido.getCorreoCliente(),
                 pedido.getNombreCliente(), pedido.getMoneda(), pedido.getSubtotal(), pedido.getDescuentoTotal(),
                 pedido.getCostoEnvio(), pedido.getImpuestosTotal(), pedido.getTotal(), pedido.getPasarelaPago(),
@@ -123,11 +125,19 @@ public class PedidoServicio {
                 EstadoPedido.derivar(ordenesDto), EstadoPagoPedido.derivar(ordenesDto), ordenesDto);
     }
 
-    private OrdenDePedido aOrden(OrdenEntidad orden) {
-        List<ItemOrdenResumen> lineas = items.findByOrdenIdAndEliminadoFalseOrderByFechaCreacionAsc(orden.getId()).stream()
-                .map(item -> new ItemOrdenResumen(item.getTituloProducto(), item.getTituloVariante(), item.getSku(),
-                        item.getPrecioUnitario(), item.getCantidad(), item.getTotalLinea()))
-                .toList();
+    /** Líneas de todas las órdenes dadas en una sola consulta, agrupadas por orden. */
+    private Map<UUID, List<ItemOrdenResumen>> lineasDe(List<OrdenEntidad> hijas) {
+        if (hijas.isEmpty()) {
+            return Map.of();
+        }
+        return items.findByOrdenIdInAndEliminadoFalseOrderByFechaCreacionAsc(hijas.stream().map(OrdenEntidad::getId).toList())
+                .stream().collect(Collectors.groupingBy(item -> item.getOrdenId(), java.util.LinkedHashMap::new,
+                        Collectors.mapping(item -> new ItemOrdenResumen(item.getTituloProducto(), item.getTituloVariante(),
+                                item.getSku(), item.getPrecioUnitario(), item.getCantidad(), item.getTotalLinea()),
+                                Collectors.toList())));
+    }
+
+    private OrdenDePedido aOrden(OrdenEntidad orden, List<ItemOrdenResumen> lineas) {
         return new OrdenDePedido(orden.getId(), orden.getNumeroOrden(), orden.getTiendaId(), orden.getEstado(),
                 orden.getEstadoPago(), orden.getEstadoPreparacion(), orden.getTotal(), orden.getTokenAcceso(), lineas);
     }

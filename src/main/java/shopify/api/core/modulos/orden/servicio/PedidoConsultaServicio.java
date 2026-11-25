@@ -36,8 +36,13 @@ public class PedidoConsultaServicio {
 
     @Transactional(readOnly = true)
     public Page<PedidoResponse> historialDelUsuario(UUID usuarioId, int pagina) {
+        Page<PedidoResumen> resumenes = pedidos.historial(usuarioId, pagina);
+        // Las tiendas de toda la página en una sola consulta, en vez de una por orden
         Map<UUID, TiendaDelPedido> cache = new HashMap<>();
-        return pedidos.historial(usuarioId, pagina).map(pedido -> aRespuesta(pedido, cache));
+        tiendas.publicas(resumenes.getContent().stream().flatMap(p -> p.ordenes().stream()).map(OrdenDePedido::tiendaId)
+                .collect(java.util.stream.Collectors.toSet()))
+                .forEach((id, t) -> cache.put(id, new TiendaDelPedido(t.id(), t.nombre(), t.subdominio())));
+        return resumenes.map(pedido -> aRespuesta(pedido, cache));
     }
 
     /** Respuesta de un pedido ya leído (también la usa el checkout global). */

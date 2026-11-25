@@ -172,6 +172,18 @@ public class TiendaServicio {
         return tiendaRepositorio.findByIdAndEliminadoFalse(tiendaId).map(TiendaServicio::aPublica);
     }
 
+    /** Datos públicos de varias tiendas en una sola consulta (aunque ya no sean operativas); las que no existen no aparecen. */
+    @Transactional(readOnly = true)
+    public Map<UUID, TiendaPublica> publicas(java.util.Collection<UUID> tiendaIds) {
+        if (tiendaIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, TiendaPublica> resultado = new java.util.HashMap<>();
+        tiendaRepositorio.findAllById(tiendaIds).stream().filter(t -> !Boolean.TRUE.equals(t.getEliminado()))
+                .forEach(t -> resultado.put(t.getId(), aPublica(t)));
+        return resultado;
+    }
+
     private static TiendaPublica aPublica(TiendaEntidad tienda) {
         return new TiendaPublica(tienda.getId(), tienda.getNombre(), tienda.getSubdominio(), tienda.getMoneda());
     }
