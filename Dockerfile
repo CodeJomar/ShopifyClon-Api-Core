@@ -68,11 +68,14 @@ WORKDIR /app
 # Copiar únicamente el JAR desde el stage de build
 COPY --from=build /workspace/app.jar app.jar
 
-# Asignar propiedad al usuario no-root
-RUN chown appuser:appgroup app.jar
+# Asignar propiedad al usuario no-root y dejar listo el directorio de respaldos por omisión
+RUN chown appuser:appgroup app.jar && mkdir -p /app/respaldos && chown appuser:appgroup /app/respaldos
 
-# Cambiar a usuario sin privilegios
-USER appuser
+# El script de entrada arranca como root solo para ajustar los permisos del volumen de respaldos (BACKUP_DIRECTORIO) y
+# baja a "appuser" con su-exec antes de lanzar la JVM: la API NUNCA corre como root. (tr: por si el archivo llega con CRLF)
+RUN apk add --no-cache su-exec
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN tr -d '\015' < /usr/local/bin/docker-entrypoint.sh > /tmp/entrada.sh && mv /tmp/entrada.sh /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Puerto de la aplicación (server.port=8080)
 EXPOSE 8080
@@ -85,5 +88,5 @@ ENV JAVA_OPTS="-XX:+ExitOnOutOfMemoryError -XX:MaxRAMPercentage=75 -Duser.timezo
 # Hora de Lima en los logs y en las herramientas del contenedor (la base y los cobros siguen usando instantes absolutos)
 ENV TZ=America/Lima
 
-# Exec form para recibir señales POSIX correctamente (SIGTERM → graceful shutdown)
-ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]
+# Exec form + exec en el script: la JVM recibe las señales POSIX (SIGTERM → graceful shutdown)
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

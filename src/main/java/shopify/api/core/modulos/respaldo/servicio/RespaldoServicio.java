@@ -91,6 +91,16 @@ public class RespaldoServicio {
         return zona;
     }
 
+    /** Si el directorio existe (o se puede crear) y la API puede escribir en él. */
+    public boolean directorioEscribible() {
+        try {
+            Files.createDirectories(directorio);
+            return Files.isWritable(directorio);
+        } catch (IOException | RuntimeException ex) {
+            return false;
+        }
+    }
+
     public Resultado ultimo() {
         return ultimo.get();
     }
@@ -125,6 +135,14 @@ public class RespaldoServicio {
             return hecho;
         } catch (ConflictoEstadoException ex) {
             throw ex;
+        } catch (java.nio.file.FileSystemException ex) {
+            borrarSilencioso(parcial);
+            ultimo.set(new Resultado(nombre, 0, 0, 0, Duration.between(inicio, reloj.instant()).toMillis(), inicio, false,
+                    ex.getClass().getSimpleName()));
+            log.error("El respaldo {} no pudo escribir en el directorio de respaldos ({}): revisa que el volumen esté montado y "
+                    + "que la API tenga permisos de escritura", nombre, ex.getClass().getSimpleName());
+            throw new ConflictoEstadoException("RES-902", "No se puede escribir en el directorio de respaldos: revisa que el "
+                    + "volumen esté montado y que la API tenga permisos de escritura");
         } catch (IOException | SQLException | RuntimeException ex) {
             borrarSilencioso(parcial);
             ultimo.set(new Resultado(nombre, 0, 0, 0, Duration.between(inicio, reloj.instant()).toMillis(), inicio, false,

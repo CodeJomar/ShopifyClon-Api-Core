@@ -57,6 +57,10 @@ public class RespaldoProgramador {
             log.info("Respaldo programado apagado (BACKUP_HABILITADO=false)");
             return;
         }
+        if (!respaldos.directorioEscribible()) {
+            log.error("BACKUP_HABILITADO=true pero la API no puede escribir en {}: los respaldos van a FALLAR. Monta un volumen "
+                    + "(en Railway, en la ruta de BACKUP_DIRECTORIO) y revisa los permisos", respaldos.directorio());
+        }
         ZoneId zona = respaldos.zona();
         for (LocalTime hora : horas) {
             String cron = "0 " + hora.getMinute() + " " + hora.getHour() + " * * *";

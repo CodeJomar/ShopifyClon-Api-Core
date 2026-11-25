@@ -42,7 +42,8 @@ public class RespaldoControlador {
 
     /** Configuración vigente, último intento y archivos guardados. */
     public record EstadoRespaldos(boolean habilitado, List<String> horas, String zona, int retencionDias,
-                                  Instant proximaEjecucion, Resultado ultimo, List<Archivo> archivos) {
+                                  boolean directorioEscribible, Instant proximaEjecucion, Resultado ultimo,
+                                  List<Archivo> archivos) {
     }
 
     @Operation(summary = "Estado del respaldo programado y lista de respaldos guardados")
@@ -50,7 +51,7 @@ public class RespaldoControlador {
     public ResponseEntity<RespuestaApi<EstadoRespaldos>> estado() {
         return RespuestaApi.ok(new EstadoRespaldos(programador.habilitado(),
                 programador.horas().stream().map(LocalTime::toString).toList(), respaldos.zona().getId(),
-                respaldos.retencionDias(), programador.proxima().map(z -> z.toInstant()).orElse(null), respaldos.ultimo(),
+                respaldos.retencionDias(), respaldos.directorioEscribible(), programador.proxima().map(z -> z.toInstant()).orElse(null), respaldos.ultimo(),
                 respaldos.listar()), "Respaldos");
     }
 
