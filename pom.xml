@@ -45,7 +45,7 @@
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
+			<!-- compile (no runtime): el respaldo (R-023) usa el COPY del driver -->
 		</dependency>
 
 		<!-- 4. Seguridad: Spring Security y Hashing BCrypt -->
