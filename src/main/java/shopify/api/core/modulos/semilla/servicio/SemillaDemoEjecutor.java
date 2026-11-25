@@ -27,6 +27,12 @@ public class SemillaDemoEjecutor implements ApplicationRunner {
     @Value("${app.semilla.admin-correo:admin.demo@otemu.test}")
     private String correoAdmin;
 
+    @Value("${app.semilla.propietario-correo:propietario.demo@otemu.test}")
+    private String correoPropietario;
+
+    @Value("${app.semilla.comprador-correo:comprador.demo@otemu.test}")
+    private String correoComprador;
+
     @Override
     public void run(ApplicationArguments argumentos) {
         if (contrasena == null || contrasena.isBlank()) {
@@ -34,7 +40,7 @@ public class SemillaDemoEjecutor implements ApplicationRunner {
             return;
         }
         try {
-            semilla.ejecutar(contrasena, correoAdmin);
+            semilla.ejecutar(contrasena, correoAdmin, correoPropietario, correoComprador);
         } catch (RuntimeException ex) {
             log.error("La semilla de demostración falló ({}); la API sigue arrancando. Se puede reintentar: es idempotente",
                     ex.getClass().getSimpleName());

@@ -64,6 +64,20 @@ class SemillaDemoTest extends PruebaIntegracionBase {
     }
 
     @Test
+    void elRepartoDeTiendasEsPropietarioTresAdminUnaYNadieReseniaLaSuya() {
+        semilla.ejecutar(CLAVE, "admin.demo@otemu.test");
+
+        String sql = "SELECT count(*) FROM \"Tiendas\" t JOIN \"Usuarios\" u ON u.\"Id\" = t.\"PropietarioId\" WHERE u.\"CorreoElectronico\" = ? AND t.\"Subdominio\" IN ('cafe-andino','casa-quinua','taller-textil-cusco',"
+                + "'neo-gadgets','aroma-selva','papel-y-tinta')";
+        assertThat(jdbc.queryForObject(sql, Long.class, "propietario.demo@otemu.test")).isEqualTo(3);
+        assertThat(jdbc.queryForObject(sql, Long.class, "admin.demo@otemu.test")).isEqualTo(1);
+        assertThat(jdbc.queryForObject(sql, Long.class, "propietario2.demo@otemu.test")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM \"ResenasProducto\" r JOIN \"Tiendas\" t ON t.\"Id\" = r.\"TiendaId\" "
+                + "WHERE r.\"UsuarioId\" = t.\"PropietarioId\" AND t.\"Subdominio\" IN ('cafe-andino','casa-quinua','taller-textil-cusco',"
+                + "'neo-gadgets','aroma-selva','papel-y-tinta')", Long.class)).isZero();
+    }
+
+    @Test
     void elMercadoMuestraProductosTiendasYEstrellas() throws Exception {
         semilla.ejecutar(CLAVE, "admin.demo@otemu.test");
 

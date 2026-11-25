@@ -58,6 +58,8 @@ public class SemillaDemoServicio {
 
     static final String MONEDA = "PEN";
     private static final int LARGO_MINIMO_CONTRASENA = 8;
+    static final String CORREO_PROPIETARIO = "propietario.demo@otemu.test";
+    static final String CORREO_COMPRADOR = "comprador.demo@otemu.test";
 
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwordEncoder;
@@ -84,8 +86,23 @@ public class SemillaDemoServicio {
 
     private record Cuentas(UUID admin, UUID propietario1, UUID propietario2, UUID comprador) {
 
+        /** Dueño de la tienda según {@code TiendaDemo.propietario}: 0 = propietario, 1 = administrador, 2 = segundo propietario. */
         UUID propietario(int indice) {
-            return indice == 0 ? propietario1 : propietario2;
+            return switch (indice) {
+                case 0 -> propietario1;
+                case 1 -> admin;
+                default -> propietario2;
+            };
+        }
+
+        /** Quien reseña en la tienda con la clave «admin»: el administrador, salvo en su propia tienda (ahí, el propietario). */
+        UUID resenaAdmin(int duenio) {
+            return duenio == 1 ? propietario1 : admin;
+        }
+
+        /** Quien reseña con la clave «cruzado»: otro propietario distinto del dueño y de {@link #resenaAdmin}. */
+        UUID resenaCruzado(int duenio) {
+            return duenio == 2 ? propietario1 : propietario2;
         }
     }
 
@@ -107,13 +124,18 @@ public class SemillaDemoServicio {
     // ------------------------------------------------------------------ entrada
 
     public Resumen ejecutar(String contrasena, String correoAdmin) {
+        return ejecutar(contrasena, correoAdmin, CORREO_PROPIETARIO, CORREO_COMPRADOR);
+    }
+
+    /** Las tres cuentas principales llevan los correos indicados (reales en un despliegue; demo por omisión). */
+    public Resumen ejecutar(String contrasena, String correoAdmin, String correoPropietario, String correoComprador) {
         if (contrasena == null || contrasena.length() < LARGO_MINIMO_CONTRASENA) {
             throw new IllegalArgumentException("La contraseña de la semilla debe tener al menos " + LARGO_MINIMO_CONTRASENA + " caracteres");
         }
         Contador contador = new Contador(new LinkedHashMap<>(), new LinkedHashMap<>());
         String hash = passwordEncoder.encode(contrasena);
 
-        Cuentas cuentas = transaccion.execute(estado -> cuentas(hash, correoAdmin, contador));
+        Cuentas cuentas = transaccion.execute(estado -> cuentas(hash, correoAdmin, correoPropietario, correoComprador, contador));
         Map<String, UUID> tiendaIds = new LinkedHashMap<>();
         for (TiendaDemo tienda : DatosDemo.TIENDAS) {
             UUID id = transaccion.execute(estado -> tienda(tienda, cuentas.propietario(tienda.propietario()), contador));
@@ -131,13 +153,13 @@ public class SemillaDemoServicio {
 
     // ------------------------------------------------------------------ cuentas
 
-    private Cuentas cuentas(String hash, String correoAdmin, Contador contador) {
+    private Cuentas cuentas(String hash, String correoAdmin, String correoPropietario, String correoComprador, Contador contador) {
         UUID rolAdmin = jdbc.queryForList("SELECT \"Id\" FROM \"RolesPlataforma\" WHERE \"Codigo\" = 'ADMIN_PLATAFORMA' "
                 + "AND \"Eliminado\" = FALSE", UUID.class).stream().findFirst().orElse(null);
-        UUID admin = usuario(correoAdmin, "Admin", "Demo", hash, rolAdmin, contador);
-        UUID p1 = usuario("propietario.demo@otemu.test", "Paula", "Propietaria", hash, null, contador);
+        UUID admin = usuario(correoAdmin, "Jomar", "Peralta Chávez", hash, rolAdmin, contador);
+        UUID p1 = usuario(correoPropietario, "Jomar", "Peralta Chávez", hash, null, contador);
         UUID p2 = usuario("propietario2.demo@otemu.test", "Pedro", "Propietario", hash, null, contador);
-        UUID comprador = usuario("comprador.demo@otemu.test", "Camila", "Compradora", hash, null, contador);
+        UUID comprador = usuario(correoComprador, "Jomar", "Peralta Chávez", hash, null, contador);
         return new Cuentas(admin, p1, p2, comprador);
     }
 
@@ -167,7 +189,7 @@ public class SemillaDemoServicio {
             tiendaId = jdbc.queryForObject("INSERT INTO \"Tiendas\" (\"PropietarioId\", \"Nombre\", \"Subdominio\", \"CorreoContacto\", "
                     + "\"Moneda\", \"Descripcion\", \"UrlLogo\", \"VisibleEnMercado\", \"EstaActiva\") "
                     + "VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, TRUE) RETURNING \"Id\"", UUID.class, propietario, demo.nombre(),
-                    demo.subdominio(), "contacto@" + demo.subdominio() + ".otemu.test", MONEDA, demo.descripcion(),
+                    demo.subdominio(), correoDe(propietario), MONEDA, demo.descripcion(),
                     "https://picsum.photos/seed/" + demo.subdominio() + "-logo/240/240");
             contador.creado("tiendas");
         }
@@ -317,14 +339,20 @@ public class SemillaDemoServicio {
         return mapa;
     }
 
+    private String correoDe(UUID usuarioId) {
+        return jdbc.queryForObject("SELECT \"CorreoElectronico\" FROM \"Usuarios\" WHERE \"Id\" = ?", String.class, usuarioId);
+    }
+
+    private static int duenioDe(String subdominio) {
+        return DatosDemo.TIENDAS.stream().filter(t -> t.subdominio().equals(subdominio)).findFirst().orElseThrow().propietario();
+    }
+
     private UUID usuarioDe(String clave, Cuentas cuentas) {
         if (clave.startsWith("resena-admin-")) {
-            return cuentas.admin();
+            return cuentas.resenaAdmin(duenioDe(clave.substring("resena-admin-".length())));
         }
         if (clave.startsWith("resena-cruzado-")) {
-            String subdominio = clave.substring("resena-cruzado-".length());
-            int duenio = DatosDemo.TIENDAS.stream().filter(t -> t.subdominio().equals(subdominio)).findFirst().orElseThrow().propietario();
-            return cuentas.propietario(duenio == 0 ? 1 : 0);
+            return cuentas.resenaCruzado(duenioDe(clave.substring("resena-cruzado-".length())));
         }
         return cuentas.comprador();
     }
@@ -437,12 +465,12 @@ public class SemillaDemoServicio {
 
     // ------------------------------------------------------------------ reseñas
 
-    /** Tres reseñas (comprador, administrador y el otro propietario) por cada uno de los dos primeros productos de cada tienda. */
+    /** Tres reseñas (comprador y otras dos cuentas que no son la dueña de la tienda) por cada uno de los dos primeros productos de cada tienda. */
     private void resenas(Cuentas cuentas, Map<String, UUID> tiendaIds, Contador contador) {
         int tiendaIdx = 0;
         for (TiendaDemo tienda : DatosDemo.TIENDAS) {
             UUID tiendaId = tiendaIds.get(tienda.subdominio());
-            List<UUID> autores = List.of(cuentas.comprador(), cuentas.admin(), cuentas.propietario(tienda.propietario() == 0 ? 1 : 0));
+            List<UUID> autores = List.of(cuentas.comprador(), cuentas.resenaAdmin(tienda.propietario()), cuentas.resenaCruzado(tienda.propietario()));
             for (int p = 0; p < 2; p++) {
                 UUID productoId = jdbc.queryForObject("SELECT \"Id\" FROM \"Productos\" WHERE \"TiendaId\" = ? AND \"IdentificadorUrl\" = ? "
                         + "AND \"Eliminado\" = FALSE", UUID.class, tiendaId, tienda.productos().get(p).slug());

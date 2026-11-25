@@ -36,7 +36,7 @@ final class DatosDemo {
     record FotoDemo(String url, String variante) {
     }
 
-    /** Tienda de la semilla. {@code propietario} es 0 o 1 (los dos propietarios demo). */
+    /** Tienda de la semilla. {@code propietario}: 0 = propietario, 1 = administrador, 2 = segundo propietario demo. */
     record TiendaDemo(String nombre, String subdominio, String descripcion, int propietario, String plan,
                       List<String> categorias, List<ProductoDemo> productos) {
     }
@@ -139,7 +139,7 @@ final class DatosDemo {
                             p("Cable USB-C Trenzado 1 m", "Carga rápida y transferencia de datos.", "25.00", null, 1, false),
                             p("Curso digital: fotografía con el celular", "Seis módulos en video para mejorar tus fotos.", "49.00", null, 1, true))),
             new TiendaDemo("Aroma Selva", "aroma-selva",
-                    "Velas y cuidado personal con insumos amazónicos, hechos en pequeños lotes.", 1, "BASICO",
+                    "Velas y cuidado personal con insumos amazónicos, hechos en pequeños lotes.", 2, "BASICO",
                     List.of("Velas", "Cuidado personal"),
                     List.of(
                             p("Vela de Soja Cedro", "Cera de soja con aroma a cedro y madera. 40 horas.", "36.00", null, 0, false),
@@ -149,7 +149,7 @@ final class DatosDemo {
                             p("Difusor de Cerámica", "Difusor de aromas con vela de té incluida.", "69.00", "85.00", 1, false),
                             p("Guía digital de aromaterapia", "Combinaciones de aromas para cada momento del día.", "17.00", null, 1, true))),
             new TiendaDemo("Papel y Tinta", "papel-y-tinta",
-                    "Papelería para escribir, planificar y dibujar, con papel de calidad.", 1, "GRATIS",
+                    "Papelería para escribir, planificar y dibujar, con papel de calidad.", 2, "GRATIS",
                     List.of("Cuadernos", "Escritura"),
                     List.of(
                             p("Cuaderno Cosido Tapa Dura A5", "Papel de 100 g, 160 hojas, cosido a mano.", "24.00", null, 0, false, "Liso", "Cuadriculado", "Punteado"),
