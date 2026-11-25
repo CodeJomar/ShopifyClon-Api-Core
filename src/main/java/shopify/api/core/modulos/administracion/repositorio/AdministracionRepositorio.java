@@ -25,7 +25,8 @@ public class AdministracionRepositorio {
             LEFT JOIN "BalancesTienda" b ON b."TiendaId" = t."Id" AND b."Eliminado" = FALSE
             WHERE t."Eliminado" = FALSE
               AND (CAST(:q AS text) IS NULL OR lower(t."Nombre") LIKE :q ESCAPE '\\' OR lower(t."Subdominio") LIKE :q ESCAPE '\\'
-                   OR lower(u."CorreoElectronico") LIKE :q ESCAPE '\\')
+                   OR lower(u."CorreoElectronico") LIKE :q ESCAPE '\\'
+                   OR lower(u."Nombres" || ' ' || u."Apellidos") LIKE :q ESCAPE '\\')
               AND (CAST(:activa AS boolean) IS NULL OR t."EstaActiva" = CAST(:activa AS boolean))
               AND (CAST(:plan AS text) IS NULL OR p."Codigo" = CAST(:plan AS text))
             """;

@@ -51,6 +51,20 @@ class AdministracionTest extends PruebaIntegracionBase {
     }
 
     @Test
+    void laBusquedaDeTiendasEncuentraTambienPorElNombreDelPropietario() throws Exception {
+        String unico = "Zoilo" + sufijo().replace("-", "");
+        jdbc.update("UPDATE \"Usuarios\" SET \"Nombres\" = ?, \"Apellidos\" = 'Quispe Mamani' "
+                + "WHERE lower(\"CorreoElectronico\") = lower(?)", unico, duenioCorreo);
+
+        for (String busqueda : new String[]{unico, unico.toLowerCase(), "quispe", "mamani", unico + " quispe"}) {
+            JsonNode lista = leer("/plataforma/tiendas?q=" + busqueda);
+            assertThat(lista.get("total").asInt()).as("busqueda: " + busqueda).isEqualTo(1);
+            assertThat(lista.get("datos").get(0).get("subdominio").asText()).isEqualTo(subdominio);
+        }
+        assertThat(leer("/plataforma/tiendas?q=" + unico + "inexistente").get("total").asInt()).isZero();
+    }
+
+    @Test
     void listaYDetalleDeTiendasConDuenioYPlan() throws Exception {
         JsonNode lista = leer("/plataforma/tiendas?q=" + subdominio);
         assertThat(lista.get("total").asInt()).isEqualTo(1);
