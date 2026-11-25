@@ -15,7 +15,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
+import shopify.api.core.comun.campana.PrecioCampana;
 import shopify.api.core.comun.excepcion.SolicitudInvalidaException;
+import shopify.api.core.modulos.campana.servicio.CampanaServicio;
 import shopify.api.core.modulos.catalogo.dto.response.VitrinaResponses;
 import shopify.api.core.modulos.catalogo.entidad.CategoriaEntidad;
 import shopify.api.core.modulos.catalogo.entidad.ImagenProductoEntidad;
@@ -45,6 +47,7 @@ public class VitrinaCatalogoServicio {
             .comparing(VarianteProductoEntidad::getPrecio)
             .thenComparing(VarianteProductoEntidad::getFechaCreacion);
 
+    private final CampanaServicio campanas;
     private final TiendaServicio tiendas;
     private final CategoriaRepositorio categorias;
     private final ProductoRepositorio productos;
@@ -86,12 +89,14 @@ public class VitrinaCatalogoServicio {
                 continue;
             }
             VarianteProductoEntidad barata = vs.stream().min(MAS_BARATA).orElseThrow();
+            PrecioCampana precio = campanas.aplicar(barata.getPrecio());
             resumenes.add(new VitrinaResponses.ProductoResumen(producto.getTitulo(), producto.getIdentificadorUrl(),
-                    barata.getPrecio(), barata.getPrecioComparacion(), principales.get(producto.getId()),
+                    precio.precioFinal(), comparacion(precio, barata.getPrecioComparacion()), principales.get(producto.getId()),
                     disponible(disponibilidad, barata.getId()),
                     calificaciones.containsKey(producto.getId()) ? calificaciones.get(producto.getId()).promedio() : null,
                     calificaciones.containsKey(producto.getId()) ? calificaciones.get(producto.getId()).cantidad() : 0L,
-                    DescripcionCorta.de(producto.getDescripcion()), resumenVariantes(vs), vs.size()));
+                    DescripcionCorta.de(producto.getDescripcion()), resumenVariantes(vs), vs.size(),
+                    precio.hayCampana() ? precio.porcentaje() : null, precio.campana()));
         }
         resumenes.sort(comparador);
 
@@ -124,9 +129,13 @@ public class VitrinaCatalogoServicio {
                 producto.getDescripcion(),
                 categoriasDe(producto.getId()),
                 vs.stream()
-                        .map(v -> new VitrinaResponses.Variante(v.getId(), v.getTitulo(), v.getPrecio(),
-                                v.getPrecioComparacion(), disponible(disponibilidad, v.getId()),
-                                Boolean.TRUE.equals(v.getRequiereEnvio())))
+                        .map(v -> {
+                            PrecioCampana precio = campanas.aplicar(v.getPrecio());
+                            return new VitrinaResponses.Variante(v.getId(), v.getTitulo(), precio.precioFinal(),
+                                    comparacion(precio, v.getPrecioComparacion()), disponible(disponibilidad, v.getId()),
+                                    Boolean.TRUE.equals(v.getRequiereEnvio()),
+                                    precio.hayCampana() ? precio.porcentaje() : null, precio.campana());
+                        })
                         .toList(),
                 imgs.stream()
                         .map(i -> new VitrinaResponses.Imagen(i.getUrlImagen(), i.getTextoAlternativo(),
@@ -164,14 +173,23 @@ public class VitrinaCatalogoServicio {
     }
 
     /** Hasta tres variantes en el orden en que se definieron; una sola «por defecto» no es una opción que mostrar. */
-    private static List<VitrinaResponses.VarianteResumen> resumenVariantes(List<VarianteProductoEntidad> variantes) {
+    private List<VitrinaResponses.VarianteResumen> resumenVariantes(List<VarianteProductoEntidad> variantes) {
         List<VarianteProductoEntidad> ordenadas = variantes.stream()
                 .sorted(Comparator.comparing(VarianteProductoEntidad::getFechaCreacion)).toList();
         if (ordenadas.size() == 1 && List.of("por defecto", "predeterminada")
                 .contains(ordenadas.get(0).getTitulo().strip().toLowerCase(Locale.ROOT))) {
             return List.of();
         }
-        return ordenadas.stream().limit(3).map(v -> new VitrinaResponses.VarianteResumen(v.getTitulo(), v.getPrecio())).toList();
+        return ordenadas.stream().limit(3).map(v -> {
+            PrecioCampana precio = campanas.aplicar(v.getPrecio());
+            return new VitrinaResponses.VarianteResumen(v.getTitulo(), precio.precioFinal(),
+                    precio.hayCampana() ? precio.precioLista() : null);
+        }).toList();
+    }
+
+    /** Con campaña la comparación es el precio de lista; sin campaña queda la que ya tenía la variante. */
+    private static java.math.BigDecimal comparacion(PrecioCampana precio, java.math.BigDecimal propia) {
+        return precio.hayCampana() ? precio.precioLista() : propia;
     }
 
     private Map<UUID, List<VarianteProductoEntidad>> variantesPorProducto(List<ProductoEntidad> candidatos) {

@@ -7,7 +7,9 @@ import java.util.UUID;
 /**
  * Carrito recalculado con precios actuales (CAR-005, D-018). Las líneas que no se pueden vender salen con
  * advertencia CAR-006 y fuera de los totales. {@code costoEnvio} es nulo salvo que se pida una tarifa (A-003);
- * entonces {@code totalEstimado} incluye el envío y es idéntico al total del checkout.
+ * entonces {@code totalEstimado} incluye el envío y es idéntico al total del checkout. Con campaña vigente
+ * (R-028) {@code precioUnitario} es el precio final, {@code precioComparacion} el de lista y {@code ahorroCampana}
+ * lo que se ahorra en esta tienda.
  */
 public record CarritoResponse(
         String token,
@@ -21,7 +23,8 @@ public record CarritoResponse(
         BigDecimal impuestosTotal,
         BigDecimal totalEstimado,
         boolean requiereEnvio,
-        List<Advertencia> advertencias) {
+        List<Advertencia> advertencias,
+        BigDecimal ahorroCampana) {
 
     public record Item(
             UUID varianteId,
@@ -30,6 +33,9 @@ public record CarritoResponse(
             String tituloVariante,
             String urlImagen,
             BigDecimal precioUnitario,
+            BigDecimal precioComparacion,
+            Integer descuentoCampanaPorcentaje,
+            String campana,
             int cantidad,
             BigDecimal totalLinea,
             boolean disponible,

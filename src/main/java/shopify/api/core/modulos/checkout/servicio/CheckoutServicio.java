@@ -27,6 +27,7 @@ import shopify.api.core.modulos.carrito.modelo.CarritoParaCheckout;
 import shopify.api.core.modulos.carrito.modelo.EstadoCarrito;
 import shopify.api.core.modulos.carrito.modelo.LineaCarrito;
 import shopify.api.core.modulos.carrito.servicio.CarritoCalculoServicio;
+import shopify.api.core.modulos.carrito.servicio.PreciosVenta;
 import shopify.api.core.modulos.carrito.servicio.CarritoCheckoutServicio;
 import shopify.api.core.modulos.catalogo.modelo.VarianteVendible;
 import shopify.api.core.modulos.catalogo.servicio.CatalogoVentaServicio;
@@ -153,9 +154,7 @@ public class CheckoutServicio {
         if (carrito.lineas().isEmpty()) {
             throw new ConflictoEstadoException("CHK-002", "No hay productos disponibles para comprar");
         }
-        List<NuevaLinea> lineas = new ArrayList<>();
-        List<LineaCalculo> lineasCalculo = new ArrayList<>();
-        BigDecimal subtotal = Dinero.CERO;
+        List<PreciosVenta.Linea> vendibles = new ArrayList<>();
         boolean requiereEnvio = false;
         Map<UUID, VarianteVendible> variantes = catalogoVenta.variantesParaVenta(tiendaId, idsDe(carrito));
         for (LineaCarrito linea : carrito.lineas()) {
@@ -163,16 +162,14 @@ public class CheckoutServicio {
             if (variante == null || !variante.vendible()) {
                 continue;
             }
-            BigDecimal totalLinea = Dinero.multiplicar(variante.precio(), linea.cantidad());
-            lineas.add(new NuevaLinea(variante.varianteId(), variante.tituloProducto(), variante.tituloVariante(),
-                    variante.sku(), linea.cantidad(), variante.precio(), totalLinea, variante.requiereEnvio()));
-            lineasCalculo.add(new LineaCalculo(variante.precio(), linea.cantidad(), variante.requiereEnvio()));
-            subtotal = subtotal.add(totalLinea);
+            vendibles.add(new PreciosVenta.Linea(variante, linea.cantidad()));
             requiereEnvio = requiereEnvio || variante.requiereEnvio();
         }
-        if (lineas.isEmpty()) {
+        if (vendibles.isEmpty()) {
             throw new ConflictoEstadoException("CHK-002", "No hay productos disponibles para comprar");
         }
+        // R-028: el cupón y su mínimo de compra se evalúan con los precios de lista; campaña y cupón no se acumulan
+        BigDecimal subtotal = PreciosVenta.subtotalLista(vendibles);
 
         // Paso 5: con envío, dirección obligatoria (VAL-001) y tarifa activa de la tienda (ENV-001)
         TarifaAplicable tarifa = null;
@@ -205,6 +202,23 @@ public class CheckoutServicio {
             cuponId = aplicable.id();
             codigoCupon = aplicable.codigo();
             descuento = CarritoCalculoServicio.descuentoDe(aplicable);
+        }
+        // R-028: gana el mayor descuento; si la campaña supera al cupón, el cupón no se aplica ni consume un uso
+        PreciosVenta.Resultado precios = PreciosVenta.resolver(vendibles, descuento);
+        if (precios.cuponIgnorado()) {
+            cuponId = null;
+            codigoCupon = null;
+        }
+        descuento = precios.descuento();
+        List<NuevaLinea> lineas = new ArrayList<>();
+        List<LineaCalculo> lineasCalculo = new ArrayList<>();
+        for (PreciosVenta.Linea linea : vendibles) {
+            VarianteVendible variante = linea.variante();
+            BigDecimal precio = precios.precioUnitario(variante);
+            lineas.add(new NuevaLinea(variante.varianteId(), variante.tituloProducto(), variante.tituloVariante(),
+                    variante.sku(), linea.cantidad(), precio, Dinero.multiplicar(precio, linea.cantidad()),
+                    variante.requiereEnvio()));
+            lineasCalculo.add(new LineaCalculo(precio, linea.cantidad(), variante.requiereEnvio()));
         }
 
         // Paso 7: recalcular y comparar con lo que vio el comprador (CHK-004)

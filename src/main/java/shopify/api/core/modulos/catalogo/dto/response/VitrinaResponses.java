@@ -15,7 +15,10 @@ public final class VitrinaResponses {
     public record Categoria(String nombre, String identificadorUrl) {
     }
 
-    /** Precio mínimo, comparación y disponibilidad son los de la variante más barata. */
+    /**
+     * Precio mínimo, comparación y disponibilidad son los de la variante más barata. Con campaña vigente (R-028) el
+     * precio ya es el final y la comparación es el precio de lista.
+     */
     public record ProductoResumen(
             String titulo,
             String identificadorUrl,
@@ -27,11 +30,13 @@ public final class VitrinaResponses {
             long cantidadResenas,
             String descripcionCorta,
             List<VarianteResumen> variantesResumen,
-            long cantidadVariantes) {
+            long cantidadVariantes,
+            Integer descuentoCampanaPorcentaje,
+            String campana) {
     }
 
-    /** Variante en la tarjeta: su título («Negro / M») y su precio. */
-    public record VarianteResumen(String titulo, BigDecimal precio) {
+    /** Variante en la tarjeta: su título («Negro / M»), su precio y, con campaña, el precio de lista. */
+    public record VarianteResumen(String titulo, BigDecimal precio, BigDecimal precioComparacion) {
     }
 
     public record ProductoDetalle(
@@ -51,7 +56,9 @@ public final class VitrinaResponses {
             BigDecimal precio,
             BigDecimal precioComparacion,
             boolean disponible,
-            boolean requiereEnvio) {
+            boolean requiereEnvio,
+            Integer descuentoCampanaPorcentaje,
+            String campana) {
     }
 
     public record Imagen(String urlImagen, String textoAlternativo, UUID varianteId, Integer posicion) {

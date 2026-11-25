@@ -21,6 +21,7 @@ public enum AccionAuditoria {
     PAGO_TARDIO_RECIBIDO,
     REEMBOLSO_EMITIDO,
     RESENA_OCULTADA,
+    CAMPANA_CAMBIADA,
     // Eventos de seguridad (R-001, B8): el prefijo SEGURIDAD_ los separa de los de negocio en la consulta de auditoría
     SEGURIDAD_CUENTA_BLOQUEADA,
     SEGURIDAD_USUARIO_BLOQUEADO,

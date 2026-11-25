@@ -29,11 +29,13 @@ public final class MercadoResponses {
             long cantidadResenas,
             String descripcionCorta,
             List<VarianteResumen> variantesResumen,
-            long cantidadVariantes) {
+            long cantidadVariantes,
+            Integer descuentoCampanaPorcentaje,
+            String campana) {
     }
 
-    /** Variante en la tarjeta: su título («Negro / M») y su precio. */
-    public record VarianteResumen(String titulo, BigDecimal precio) {
+    /** Variante en la tarjeta: su título («Negro / M»), su precio y, con campaña, el precio de lista. */
+    public record VarianteResumen(String titulo, BigDecimal precio, BigDecimal precioComparacion) {
     }
 
     public record TiendaMercadoResponse(

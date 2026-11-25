@@ -16,7 +16,9 @@ import org.springframework.stereotype.Service;
 import shopify.api.core.comun.cache.CacheTemporal;
 import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 import shopify.api.core.comun.util.DescripcionCorta;
+import shopify.api.core.comun.campana.PrecioCampana;
 import shopify.api.core.comun.excepcion.SolicitudInvalidaException;
+import shopify.api.core.modulos.campana.servicio.CampanaServicio;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.CategoriaMercadoResponse;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.DestacadosMercadoResponse;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.ProductoMercadoResponse;
@@ -45,6 +47,7 @@ public class MercadoServicio {
 
     private final MercadoRepositorio repositorio;
     private final CacheTemporal cache;
+    private final CampanaServicio campanas;
 
     public Page<ProductoMercadoResponse> productos(String texto, String categoria, String tienda, BigDecimal precioMin,
                                                    BigDecimal precioMax, String orden, Integer pagina, Integer tamano) {
@@ -158,7 +161,7 @@ public class MercadoServicio {
         Map<UUID, List<VarianteResumen>> variantes = new HashMap<>();
         for (Map<String, Object> fila : repositorio.primerasVariantes(productos.stream().map(ProductoMercado::id).toList())) {
             variantes.computeIfAbsent((UUID) fila.get("producto"), k -> new ArrayList<>())
-                    .add(new VarianteResumen((String) fila.get("titulo"), (BigDecimal) fila.get("precio")));
+                    .add(variante((String) fila.get("titulo"), (BigDecimal) fila.get("precio")));
         }
         return productos.stream().map(p -> aProducto(p, resumen(p, variantes.getOrDefault(p.id(), List.of())))).toList();
     }
@@ -171,11 +174,20 @@ public class MercadoServicio {
         return soloPorDefecto ? List.of() : primeras;
     }
 
-    private static ProductoMercadoResponse aProducto(ProductoMercado p, List<VarianteResumen> variantes) {
-        return new ProductoMercadoResponse(p.id(), p.titulo(), p.identificadorUrl(), p.precioDesde(), p.precioComparacionDesde(),
+    /** Con campaña vigente (R-028) el precio sale ya rebajado y el de lista pasa a ser el de comparación. */
+    private VarianteResumen variante(String titulo, BigDecimal precio) {
+        PrecioCampana p = campanas.aplicar(precio);
+        return new VarianteResumen(titulo, p.precioFinal(), p.hayCampana() ? p.precioLista() : null);
+    }
+
+    private ProductoMercadoResponse aProducto(ProductoMercado p, List<VarianteResumen> variantes) {
+        PrecioCampana precio = campanas.aplicar(p.precioDesde());
+        return new ProductoMercadoResponse(p.id(), p.titulo(), p.identificadorUrl(), precio.precioFinal(),
+                precio.hayCampana() ? precio.precioLista() : p.precioComparacionDesde(),
                 p.moneda(), p.imagenUrl(), p.esDigital(), p.hayStock(),
                 new TiendaResumen(p.tiendaNombre(), p.tiendaSubdominio(), p.tiendaLogoUrl()),
-                p.calificacionPromedio(), p.cantidadResenas(), DescripcionCorta.de(p.descripcion()), variantes, p.cantidadVariantes());
+                p.calificacionPromedio(), p.cantidadResenas(), DescripcionCorta.de(p.descripcion()), variantes, p.cantidadVariantes(),
+                precio.hayCampana() ? precio.porcentaje() : null, precio.campana());
     }
 
     private static TiendaMercadoResponse aTienda(TiendaMercado t) {

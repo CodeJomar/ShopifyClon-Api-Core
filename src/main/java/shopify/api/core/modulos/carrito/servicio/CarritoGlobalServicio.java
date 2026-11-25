@@ -241,7 +241,7 @@ public class CarritoGlobalServicio {
             CarritoResponse r = calculo.construir(tienda.id(), carrito, lineas, List.of(), envios.get(tienda.id()));
             grupos.add(new TiendaCarrito(aTienda(tienda), r.moneda(), r.items(), r.cupon(), r.subtotal(),
                     r.descuentoTotal(), r.costoEnvio(), r.impuestosTotal(), r.totalEstimado(), r.requiereEnvio(),
-                    r.advertencias()));
+                    r.advertencias(), r.ahorroCampana()));
             total = total.add(r.totalEstimado());
             articulos += lineas.stream().mapToInt(ItemCarritoEntidad::getCantidad).sum();
             moneda = moneda == null ? r.moneda() : moneda;

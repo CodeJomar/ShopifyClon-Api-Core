@@ -34,7 +34,8 @@ public record CarritoGlobalResponse(
             BigDecimal impuestosTotal,
             BigDecimal total,
             boolean requiereEnvio,
-            List<Advertencia> advertencias) {
+            List<Advertencia> advertencias,
+            BigDecimal ahorroCampana) {
     }
 
     /** Tarifas activas de una tienda del carrito, para que el comprador elija el envío de cada una. */

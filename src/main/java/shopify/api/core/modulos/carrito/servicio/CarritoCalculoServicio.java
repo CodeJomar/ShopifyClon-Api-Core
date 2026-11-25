@@ -84,9 +84,11 @@ public class CarritoCalculoServicio {
         Map<UUID, Disponibilidad> disponibilidad = inventario.disponibilidad(ids);
 
         List<Advertencia> advertencias = new ArrayList<>(advertenciasPrevias);
+        // Las líneas vendibles se completan después: solo entonces se sabe si rige la campaña o el cupón (R-028)
         List<Item> lineasRespuesta = new ArrayList<>();
-        List<LineaCalculo> lineasCalculo = new ArrayList<>();
-        BigDecimal subtotalVendible = Dinero.CERO;
+        List<Integer> posiciones = new ArrayList<>();
+        List<PreciosVenta.Linea> vendibles = new ArrayList<>();
+        List<Boolean> disponibles = new ArrayList<>();
 
         for (ItemCarritoEntidad item : items) {
             UUID varianteId = item.getVarianteId();
@@ -100,14 +102,10 @@ public class CarritoCalculoServicio {
                         variante == null ? null : variante.tituloProducto(),
                         variante == null ? null : variante.tituloVariante(),
                         variante == null ? null : variante.urlImagen(),
-                        null, item.getCantidad(), Dinero.CERO, false,
+                        null, null, null, null, item.getCantidad(), Dinero.CERO, false,
                         variante != null && variante.requiereEnvio()));
                 continue;
             }
-
-            BigDecimal totalLinea = Dinero.multiplicar(variante.precio(), item.getCantidad());
-            lineasCalculo.add(new LineaCalculo(variante.precio(), item.getCantidad(), variante.requiereEnvio()));
-            subtotalVendible = subtotalVendible.add(totalLinea);
 
             boolean disponibleAhora = disponible != null && disponible.disponible();
             if (disponible != null && disponible.rastrea() && !disponible.ventaSinStock()
@@ -116,23 +114,26 @@ public class CarritoCalculoServicio {
                         "Pediste " + item.getCantidad() + " y quedan " + Math.max(disponible.vendible(), 0) + " disponibles",
                         varianteId));
             }
-            lineasRespuesta.add(new Item(varianteId, variante.productoId(), variante.tituloProducto(),
-                    variante.tituloVariante(), variante.urlImagen(), variante.precio(), item.getCantidad(), totalLinea,
-                    disponibleAhora, variante.requiereEnvio()));
+            posiciones.add(lineasRespuesta.size());
+            lineasRespuesta.add(null);
+            vendibles.add(new PreciosVenta.Linea(variante, item.getCantidad()));
+            disponibles.add(disponibleAhora);
         }
 
+        // El cupón y su mínimo de compra se evalúan con los precios de lista; la campaña y el cupón no se acumulan
+        BigDecimal subtotalLista = PreciosVenta.subtotalLista(vendibles);
         Cupon cupon = null;
-        DescuentoCalculo descuento = null;
+        DescuentoCalculo descuentoCupon = null;
         if (carrito.getCuponId() != null) {
             Optional<String> codigo = cupones.codigoDe(tiendaId, carrito.getCuponId());
             if (codigo.isEmpty()) {
                 advertencias.add(new Advertencia("CUP-003", "El cupón ya no existe", null));
-            } else if (lineasCalculo.isEmpty()) {
+            } else if (vendibles.isEmpty()) {
                 cupon = new Cupon(codigo.get(), Dinero.CERO);
             } else {
-                EvaluacionCupon evaluacion = cupones.evaluarCupon(tiendaId, codigo.get(), subtotalVendible);
+                EvaluacionCupon evaluacion = cupones.evaluarCupon(tiendaId, codigo.get(), subtotalLista);
                 if (evaluacion.aplica()) {
-                    descuento = descuentoDe(evaluacion.aplicable());
+                    descuentoCupon = descuentoDe(evaluacion.aplicable());
                 } else {
                     advertencias.add(new Advertencia("CUP-003", evaluacion.motivo(), null));
                 }
@@ -140,21 +141,43 @@ public class CarritoCalculoServicio {
             }
         }
 
+        PreciosVenta.Resultado precios = PreciosVenta.resolver(vendibles, descuentoCupon);
+        if (precios.cuponIgnorado()) {
+            advertencias.add(new Advertencia("CAM-002",
+                    "La campaña ya te da un mejor precio que el cupón; el cupón no se aplicó", null));
+        }
+
+        List<LineaCalculo> lineasCalculo = new ArrayList<>();
+        for (int i = 0; i < vendibles.size(); i++) {
+            PreciosVenta.Linea linea = vendibles.get(i);
+            VarianteVendible variante = linea.variante();
+            BigDecimal precio = precios.precioUnitario(variante);
+            boolean conCampana = precios.conCampana(variante);
+            lineasRespuesta.set(posiciones.get(i), new Item(variante.varianteId(), variante.productoId(),
+                    variante.tituloProducto(), variante.tituloVariante(), variante.urlImagen(), precio,
+                    conCampana ? variante.precioLista() : null,
+                    conCampana ? variante.descuentoCampanaPorcentaje() : null,
+                    conCampana ? variante.campana() : null,
+                    linea.cantidad(), Dinero.multiplicar(precio, linea.cantidad()), disponibles.get(i),
+                    variante.requiereEnvio()));
+            lineasCalculo.add(new LineaCalculo(precio, linea.cantidad(), variante.requiereEnvio()));
+        }
+
         if (lineasCalculo.isEmpty()) {
             return new CarritoResponse(carrito.getTokenSesion(), carrito.getEstado().name(), configuracion.moneda(),
                     lineasRespuesta, cupon, Dinero.CERO, Dinero.CERO, tarifaEnvioId == null ? null : Dinero.CERO,
-                    Dinero.CERO, Dinero.CERO, false, advertencias);
+                    Dinero.CERO, Dinero.CERO, false, advertencias, Dinero.CERO);
         }
 
         boolean requiereEnvio = lineasCalculo.stream().anyMatch(LineaCalculo::requiereEnvio);
         TarifaAplicable tarifa = tarifaEnvioId != null && requiereEnvio ? tarifas.buscarActiva(tiendaId, tarifaEnvioId) : null;
-        TotalesCalculados totales = calcularTotales(lineasCalculo, descuento, tarifa, configuracion);
+        TotalesCalculados totales = calcularTotales(lineasCalculo, precios.descuento(), tarifa, configuracion);
         if (cupon != null) {
             cupon = new Cupon(cupon.codigo(), totales.descuentoTotal());
         }
         return new CarritoResponse(carrito.getTokenSesion(), carrito.getEstado().name(), configuracion.moneda(),
                 lineasRespuesta, cupon, totales.subtotal(), totales.descuentoTotal(),
                 tarifaEnvioId == null ? null : totales.costoEnvio(), totales.impuestosTotal(),
-                totales.total(), totales.requiereEnvio(), advertencias);
+                totales.total(), totales.requiereEnvio(), advertencias, precios.ahorroCampana());
     }
 }

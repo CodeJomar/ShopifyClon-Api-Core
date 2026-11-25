@@ -60,7 +60,7 @@ public class SecurityConfig {
                         // Rutas públicas
                         .requestMatchers(HttpMethod.POST, "/carrito/vincular").authenticated()
                         .requestMatchers("/auth/**", "/vitrina/**", "/webhooks/**", "/carrito", "/carrito/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/planes", "/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/planes", "/health", "/campanas/activa").permitAll()
                         .requestMatchers(HttpMethod.GET, "/mercado/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/pedidos/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/pedidos/*/pagar", "/checkout").permitAll()

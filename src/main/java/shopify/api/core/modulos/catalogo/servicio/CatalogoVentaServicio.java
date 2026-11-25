@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import shopify.api.core.comun.campana.PrecioCampana;
+import shopify.api.core.modulos.campana.servicio.CampanaServicio;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,7 @@ import shopify.api.core.modulos.catalogo.repositorio.VarianteVentaRepositorio;
 public class CatalogoVentaServicio {
 
     private final VarianteVentaRepositorio variantes;
+    private final CampanaServicio campanas;
 
     /**
      * Mapa por id de variante. Una variante que no existe en la tienda no aparece; una que existe pero no se
@@ -30,10 +33,11 @@ public class CatalogoVentaServicio {
             return resultado;
         }
         for (VarianteVentaVista fila : variantes.buscarParaVenta(tiendaId, varianteIds)) {
+            PrecioCampana precio = campanas.aplicar(fila.getPrecio());
             resultado.put(fila.getVarianteId(), new VarianteVendible(fila.getVarianteId(), fila.getProductoId(),
-                    fila.getTituloProducto(), fila.getTituloVariante(), fila.getSku(), fila.getPrecio(),
+                    fila.getTituloProducto(), fila.getTituloVariante(), fila.getSku(), precio.precioFinal(),
                     Boolean.TRUE.equals(fila.getRequiereEnvio()), fila.getUrlImagen(),
-                    Boolean.TRUE.equals(fila.getVendible())));
+                    Boolean.TRUE.equals(fila.getVendible()), precio.precioLista(), precio.porcentaje(), precio.campana()));
         }
         return resultado;
     }
