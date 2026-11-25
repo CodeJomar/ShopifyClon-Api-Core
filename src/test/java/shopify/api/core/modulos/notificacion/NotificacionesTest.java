@@ -76,6 +76,8 @@ class NotificacionesTest extends PruebaIntegracionBase {
         assertThat(correo.getTo()).containsExactly("nuevo@prueba.test");
         assertThat(correo.getText()).contains("482913").contains("24 horas");
         assertThat(correo.getHtml()).contains("482913").contains("OTemu");
+        assertThat(correo.getText()).contains("/activar-cuenta?correo=nuevo%40prueba.test");
+        assertThat(correo.getHtml()).contains("/activar-cuenta?correo=nuevo%40prueba.test");
     }
 
     @Test
@@ -97,7 +99,7 @@ class NotificacionesTest extends PruebaIntegracionBase {
 
         List<Correo> correos = correos(2);
         Correo alComprador = correos.stream().filter(m -> m.getTo()[0].equals("comprador@prueba.test")).findFirst().orElseThrow();
-        assertThat(alComprador.getText()).contains("#1001").contains("/" + subdominio + "/ordenes/ab12cd34token");
+        assertThat(alComprador.getText()).contains("#1001").contains("/tienda/" + subdominio + "/orden/ab12cd34token");
         Correo alaTienda = correos.stream().filter(m -> m.getTo()[0].equals(correoContacto)).findFirst().orElseThrow();
         assertThat(alaTienda.getSubject()).contains("Nueva orden #1001");
     }

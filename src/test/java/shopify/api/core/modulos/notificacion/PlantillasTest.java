@@ -15,7 +15,7 @@ class PlantillasTest {
     private static List<Mensaje> todas(String nombre) {
         BigDecimal total = new BigDecimal("25.50");
         return List.of(
-                Plantillas.activacion(nombre, "123456"),
+                Plantillas.activacion(nombre, "123456", "https://otemu.test/activar-cuenta?correo=a%40b.test"),
                 Plantillas.recuperacion(nombre, "123456"),
                 Plantillas.cuentaBloqueada(nombre, "123456", 15),
                 Plantillas.segundoFactor(nombre, "123456"),
@@ -58,7 +58,7 @@ class PlantillasTest {
 
     @Test
     void elCodigoApareceEnElHtmlYElAsuntoDeActivacionDiceOTemu() {
-        Mensaje m = Plantillas.activacion("Ana", "482913");
+        Mensaje m = Plantillas.activacion("Ana", "482913", "https://otemu.test/activar-cuenta?correo=a%40b.test");
         assertThat(m.asunto()).isEqualTo("Activa tu cuenta en OTemu");
         assertThat(m.html()).contains("482913").contains("24 horas");
     }

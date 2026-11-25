@@ -17,15 +17,16 @@ public final class Plantillas {
     public record Mensaje(String asunto, String texto, String html) {
     }
 
-    public static Mensaje activacion(String nombres, String codigo) {
+    public static Mensaje activacion(String nombres, String codigo, String enlace) {
         String html = PlantillaCorreo.nuevo("Tu código de activación es " + codigo, "Activa tu cuenta")
                 .saludo(nombres)
                 .parrafo("¡Bienvenido a OTemu! Para terminar de crear tu cuenta, ingresa este código de activación:")
                 .codigo(codigo, "Vence en 24 horas")
+                .boton("Activar mi cuenta", enlace)
                 .parrafo("Si no creaste una cuenta en OTemu, puedes ignorar este correo.")
                 .html();
         return new Mensaje("Activa tu cuenta en OTemu",
-                "Hola " + nombres + ",\n\nTu código de activación es: " + codigo + " (vence en 24 horas).", html);
+                "Hola " + nombres + ",\n\nTu código de activación es: " + codigo + " (vence en 24 horas).\nActiva tu cuenta en: " + enlace, html);
     }
 
     public static Mensaje recuperacion(String nombres, String codigo) {

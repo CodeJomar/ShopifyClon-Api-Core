@@ -34,7 +34,8 @@ public class NotificacionesOrdenEscuchador {
         NotificacionesUsuarioEscuchador.enviarSeguro("orden creada", () -> {
             DatosNotificacionOrden orden = ordenes.datosNotificacion(evento.ordenId());
             DatosContactoTienda tienda = tiendas.contacto(orden.tiendaId());
-            String enlace = urlBase + "/" + tienda.subdominio() + "/ordenes/" + orden.tokenAcceso();
+            // Ruta real de la web: /tienda/{subdominio}/orden/{token}
+            String enlace = urlBase + "/tienda/" + tienda.subdominio() + "/orden/" + orden.tokenAcceso();
             var alComprador = Plantillas.ordenCreadaComprador(orden.numeroOrden(), orden.nombreCliente(), orden.total(),
                     tienda.moneda(), enlace);
             correo.enviar(orden.correoCliente(), alComprador.asunto(), alComprador.texto(), alComprador.html());

@@ -1,7 +1,10 @@
 package shopify.api.core.modulos.notificacion.escuchador;
 
 import lombok.RequiredArgsConstructor;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -21,11 +24,16 @@ public class NotificacionesUsuarioEscuchador {
 
     private final EnviadorCorreo correo;
 
+    @Value("${app.web.url-base:http://localhost:3000}")
+    private String urlBase;
+
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void alEmitirCodigoActivacion(CodigoActivacionEmitidoEvento evento) {
         enviarSeguro("activación", () -> {
-            var mensaje = Plantillas.activacion(evento.nombres(), evento.codigo());
+            // Ruta real de la web: /activar-cuenta?correo=<correo>
+            String enlace = urlBase + "/activar-cuenta?correo=" + URLEncoder.encode(evento.correo(), StandardCharsets.UTF_8);
+            var mensaje = Plantillas.activacion(evento.nombres(), evento.codigo(), enlace);
             correo.enviar(evento.correo(), mensaje.asunto(), mensaje.texto(), mensaje.html());
         });
     }
