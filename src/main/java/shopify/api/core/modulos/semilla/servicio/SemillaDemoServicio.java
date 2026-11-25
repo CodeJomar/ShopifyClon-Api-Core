@@ -74,6 +74,9 @@ public class SemillaDemoServicio {
     private final GeneradorToken generadorToken;
     private final Clock reloj;
 
+    @org.springframework.beans.factory.annotation.Value("${app.semilla.url-fotos:http://localhost:8080/api/v1/semilla-fotos}")
+    private String urlFotos;
+
     /** Cuántas piezas se crearon y cuántas ya existían, por categoría. */
     public record Resumen(Map<String, Integer> creados, Map<String, Integer> omitidos) {
 
@@ -84,14 +87,15 @@ public class SemillaDemoServicio {
 
     private enum Estado { PENDIENTE, PAGADO, PREPARADO, ENTREGADO }
 
-    private record Cuentas(UUID admin, UUID propietario1, UUID propietario2, UUID comprador) {
+    private record Cuentas(UUID admin, UUID propietario1, UUID propietario2, UUID comprador, List<UUID> otros) {
 
         /** Dueño de la tienda según {@code TiendaDemo.propietario}: 0 = propietario, 1 = administrador, 2 = segundo propietario. */
         UUID propietario(int indice) {
             return switch (indice) {
                 case 0 -> propietario1;
                 case 1 -> admin;
-                default -> propietario2;
+                case 2 -> propietario2;
+                default -> otros.get(indice - 3);
             };
         }
 
@@ -160,7 +164,11 @@ public class SemillaDemoServicio {
         UUID p1 = usuario(correoPropietario, "Jomar", "Peralta Chávez", hash, null, contador);
         UUID p2 = usuario("propietario2.demo@otemu.test", "Pedro", "Propietario", hash, null, contador);
         UUID comprador = usuario(correoComprador, "Jomar", "Peralta Chávez", hash, null, contador);
-        return new Cuentas(admin, p1, p2, comprador);
+        List<UUID> otros = List.of(
+                usuario("propietario3.demo@otemu.test", "Lucía", "Quispe", hash, null, contador),
+                usuario("propietario4.demo@otemu.test", "Diego", "Mamani", hash, null, contador),
+                usuario("propietario5.demo@otemu.test", "Rosa", "Huamán", hash, null, contador));
+        return new Cuentas(admin, p1, p2, comprador, otros);
     }
 
     private UUID usuario(String correo, String nombres, String apellidos, String hash, UUID rolPlataforma, Contador contador) {
@@ -295,7 +303,12 @@ public class SemillaDemoServicio {
     }
 
     /** Dos imágenes que siempre cargan: un bloque de color con el nombre del producto (placehold.co). */
-    private static List<FotoDemo> fotosPorDefecto(ProductoDemo demo, TiendaDemo tienda) {
+    private List<FotoDemo> fotosPorDefecto(ProductoDemo demo, TiendaDemo tienda) {
+        List<String> reales = DatosDemo.fotosReales(tienda.subdominio(), demo.slug());
+        if (!reales.isEmpty()) {
+            String raiz = urlFotos.endsWith("/") ? urlFotos : urlFotos + "/";
+            return reales.stream().map(archivo -> new FotoDemo(raiz + archivo, null)).toList();
+        }
         String[] fondos = {"6f4e37", "c8a96a", "8a5a44", "1f3a5f", "3f6b4f", "5b4b8a"};
         int indice = DatosDemo.TIENDAS.indexOf(tienda);
         String fondo = fondos[Math.floorMod(indice, fondos.length)];
@@ -333,7 +346,7 @@ public class SemillaDemoServicio {
         for (TiendaDemo tienda : DatosDemo.TIENDAS) {
             for (String quien : List.of("comprador", "admin", "cruzado")) {
                 mapa.put("resena-" + quien + "-" + tienda.subdominio(), List.of(
-                        new Tramo(tienda.subdominio(), List.of(new int[]{0, 1}, new int[]{1, 1}), Estado.ENTREGADO)));
+                        new Tramo(tienda.subdominio(), List.of(new int[]{0, 1}, new int[]{1, 1}, new int[]{2, 1}), Estado.ENTREGADO)));
             }
         }
         return mapa;
@@ -465,18 +478,20 @@ public class SemillaDemoServicio {
 
     // ------------------------------------------------------------------ reseñas
 
-    /** Tres reseñas (comprador y otras dos cuentas que no son la dueña de la tienda) por cada uno de los dos primeros productos de cada tienda. */
+    /** Tres reseñas (comprador y otras dos cuentas que no son la dueña de la tienda) por cada uno de los tres primeros productos de cada tienda. */
     private void resenas(Cuentas cuentas, Map<String, UUID> tiendaIds, Contador contador) {
         int tiendaIdx = 0;
         for (TiendaDemo tienda : DatosDemo.TIENDAS) {
             UUID tiendaId = tiendaIds.get(tienda.subdominio());
             List<UUID> autores = List.of(cuentas.comprador(), cuentas.resenaAdmin(tienda.propietario()), cuentas.resenaCruzado(tienda.propietario()));
-            for (int p = 0; p < 2; p++) {
+            for (int p = 0; p < 3; p++) {
                 UUID productoId = jdbc.queryForObject("SELECT \"Id\" FROM \"Productos\" WHERE \"TiendaId\" = ? AND \"IdentificadorUrl\" = ? "
                         + "AND \"Eliminado\" = FALSE", UUID.class, tiendaId, tienda.productos().get(p).slug());
                 for (int a = 0; a < autores.size(); a++) {
-                    int calificacion = 3 + ((tiendaIdx + p + a) % 3);
-                    String comentario = DatosDemo.COMENTARIOS.get((tiendaIdx * 3 + p * 2 + a) % DatosDemo.COMENTARIOS.size());
+                    // El primer producto de cada tienda es el mejor valorado (5 estrellas); algunas reseñas no llevan comentario
+                    int calificacion = p == 0 ? 5 : 3 + ((tiendaIdx + p + a) % 3);
+                    String comentario = p == 2 && a == 2 ? null
+                            : DatosDemo.COMENTARIOS.get((tiendaIdx * 3 + p * 2 + a) % DatosDemo.COMENTARIOS.size());
                     int filas = jdbc.update("INSERT INTO \"ResenasProducto\" (\"ProductoId\", \"TiendaId\", \"UsuarioId\", \"Calificacion\", \"Comentario\") "
                             + "SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM \"ResenasProducto\" WHERE \"ProductoId\" = ? "
                             + "AND \"UsuarioId\" = ? AND \"Eliminado\" = FALSE)", productoId, tiendaId, autores.get(a), calificacion, comentario,

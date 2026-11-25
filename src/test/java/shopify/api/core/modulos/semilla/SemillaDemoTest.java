@@ -18,7 +18,9 @@ class SemillaDemoTest extends PruebaIntegracionBase {
 
     private static final String CLAVE = "Demo-Segura-2026!";
     private static final List<String> SUBDOMINIOS = List.of("cafe-andino", "casa-quinua", "taller-textil-cusco", "neo-gadgets",
-            "aroma-selva", "papel-y-tinta");
+            "aroma-selva", "papel-y-tinta", "dulce-pacha", "patitas-andinas", "altura-outdoor", "hogar-quillay", "libros-del-sur", "joyas-inti");
+
+    private static final String SUBDOMINIOS_SQL = SUBDOMINIOS.stream().map(x -> "'" + x + "'").collect(java.util.stream.Collectors.joining(","));
 
     @Autowired
     private SemillaDemoServicio semilla;
@@ -29,8 +31,7 @@ class SemillaDemoTest extends PruebaIntegracionBase {
     }
 
     private Map<String, Long> conteos() {
-        String enTiendas = "(SELECT \"Id\" FROM \"Tiendas\" WHERE \"Subdominio\" IN ('cafe-andino','casa-quinua','taller-textil-cusco',"
-                + "'neo-gadgets','aroma-selva','papel-y-tinta'))";
+        String enTiendas = "(SELECT \"Id\" FROM \"Tiendas\" WHERE \"Subdominio\" IN (%s))".formatted(SUBDOMINIOS_SQL);
         return Map.of(
                 "cuentas", contar("SELECT count(*) FROM \"Usuarios\" WHERE \"CorreoElectronico\" LIKE '%.demo@otemu.test'"),
                 "tiendas", contar("SELECT count(*) FROM " + enTiendas + " t"),
@@ -48,14 +49,14 @@ class SemillaDemoTest extends PruebaIntegracionBase {
         Resumen primera = semilla.ejecutar(CLAVE, "admin.demo@otemu.test");
         Map<String, Long> tras1 = conteos();
 
-        assertThat(tras1.get("cuentas")).isEqualTo(4);
-        assertThat(tras1.get("tiendas")).isEqualTo(6);
-        assertThat(tras1.get("productos")).isEqualTo(38);
-        assertThat(tras1.get("tarifas")).isEqualTo(12);
+        assertThat(tras1.get("cuentas")).isEqualTo(7);
+        assertThat(tras1.get("tiendas")).isEqualTo(12);
+        assertThat(tras1.get("productos")).isEqualTo(120);
+        assertThat(tras1.get("tarifas")).isEqualTo(24);
         assertThat(tras1.get("pedidos")).isGreaterThanOrEqualTo(5);
-        assertThat(tras1.get("resenas")).isEqualTo(36);
+        assertThat(tras1.get("resenas")).isEqualTo(108);
         // La base se comparte entre las pruebas: la primera corrida de esta puede ya encontrar todo creado
-        assertThat(primera.creados().getOrDefault("tiendas", 0) + primera.omitidos().getOrDefault("tiendas", 0)).isEqualTo(6);
+        assertThat(primera.creados().getOrDefault("tiendas", 0) + primera.omitidos().getOrDefault("tiendas", 0)).isEqualTo(12);
 
         Resumen segunda = semilla.ejecutar(CLAVE, "admin.demo@otemu.test");
 
@@ -67,14 +68,32 @@ class SemillaDemoTest extends PruebaIntegracionBase {
     void elRepartoDeTiendasEsPropietarioTresAdminUnaYNadieReseniaLaSuya() {
         semilla.ejecutar(CLAVE, "admin.demo@otemu.test");
 
-        String sql = "SELECT count(*) FROM \"Tiendas\" t JOIN \"Usuarios\" u ON u.\"Id\" = t.\"PropietarioId\" WHERE u.\"CorreoElectronico\" = ? AND t.\"Subdominio\" IN ('cafe-andino','casa-quinua','taller-textil-cusco',"
-                + "'neo-gadgets','aroma-selva','papel-y-tinta')";
+        String sql = "SELECT count(*) FROM \"Tiendas\" t JOIN \"Usuarios\" u ON u.\"Id\" = t.\"PropietarioId\" WHERE u.\"CorreoElectronico\" = ? AND t.\"Subdominio\" IN (" + SUBDOMINIOS_SQL + ")";
         assertThat(jdbc.queryForObject(sql, Long.class, "propietario.demo@otemu.test")).isEqualTo(3);
         assertThat(jdbc.queryForObject(sql, Long.class, "admin.demo@otemu.test")).isEqualTo(1);
         assertThat(jdbc.queryForObject(sql, Long.class, "propietario2.demo@otemu.test")).isEqualTo(2);
+        for (String n : List.of("3", "4", "5")) {
+            assertThat(jdbc.queryForObject(sql, Long.class, "propietario" + n + ".demo@otemu.test")).isEqualTo(2);
+        }
+        // Cada tienda tiene 10 productos, uno con poco stock y otro agotado
+        String stock = "SELECT count(*) FROM \"Tiendas\" t WHERE t.\"Subdominio\" IN (" + SUBDOMINIOS_SQL + ") AND EXISTS (SELECT 1 FROM \"Productos\" p "
+                + "JOIN \"VariantesProducto\" v ON v.\"ProductoId\" = p.\"Id\" JOIN \"InventarioVariante\" i ON i.\"VarianteId\" = v.\"Id\" "
+                + "WHERE p.\"TiendaId\" = t.\"Id\" AND p.\"EsDigital\" = FALSE AND i.\"CantidadDisponible\" %s)";
+        assertThat(jdbc.queryForObject(stock.formatted("BETWEEN 1 AND 5"), Long.class)).isEqualTo(12);
+        assertThat(jdbc.queryForObject(stock.formatted("= 0"), Long.class)).isEqualTo(12);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM \"ResenasProducto\" r JOIN \"Tiendas\" t ON t.\"Id\" = r.\"TiendaId\" "
-                + "WHERE r.\"UsuarioId\" = t.\"PropietarioId\" AND t.\"Subdominio\" IN ('cafe-andino','casa-quinua','taller-textil-cusco',"
-                + "'neo-gadgets','aroma-selva','papel-y-tinta')", Long.class)).isZero();
+                + "WHERE r.\"UsuarioId\" = t.\"PropietarioId\" AND t.\"Subdominio\" IN (" + SUBDOMINIOS_SQL + ")", Long.class)).isZero();
+    }
+
+    @Test
+    void lasFotosRealesDelCatalogoSeGuardanYSeSirvenSinSesion() throws Exception {
+        semilla.ejecutar(CLAVE, "admin.demo@otemu.test");
+
+        String archivo = jdbc.queryForObject("SELECT substring(\"UrlImagen\" from '[^/]+$') FROM \"ImagenesProducto\" "
+                + "WHERE \"UrlImagen\" LIKE '%/semilla-fotos/%' LIMIT 1", String.class);
+        assertThat(archivo).endsWith(".jpg");
+        assertThat(contar("SELECT count(*) FROM \"ImagenesProducto\" WHERE \"UrlImagen\" LIKE '%/semilla-fotos/%'")).isGreaterThanOrEqualTo(200);
+        getConToken("/semilla-fotos/" + archivo, null, null).andExpect(status().isOk());
     }
 
     @Test
@@ -84,7 +103,7 @@ class SemillaDemoTest extends PruebaIntegracionBase {
         for (String subdominio : SUBDOMINIOS) {
             JsonNode productos = cuerpo(getConToken("/mercado/productos?tienda=" + subdominio, null, null).andExpect(status().isOk()))
                     .get("datos");
-            assertThat(productos.get("total").asInt()).isEqualTo(List.of("cafe-andino", "taller-textil-cusco").contains(subdominio) ? 7 : 6);
+            assertThat(productos.get("total").asInt()).isEqualTo(10);
             getConToken("/mercado/tiendas/" + subdominio, null, null).andExpect(status().isOk());
         }
         JsonNode conEstrellas = cuerpo(getConToken("/mercado/productos?tienda=cafe-andino&orden=mejor_calificados", null, null)
@@ -139,7 +158,7 @@ class SemillaDemoTest extends PruebaIntegracionBase {
     }
 
     @Test
-    void elAdministradorDemoEntraYVeLasSeisTiendas() throws Exception {
+    void elAdministradorDemoEntraYVeLasDoceTiendas() throws Exception {
         semilla.ejecutar(CLAVE, "admin.demo@otemu.test");
 
         String token = cuerpo(postJson(Rutas.AUTH_LOGIN, Map.of("correo_electronico", "admin.demo@otemu.test", "contrasena", CLAVE), null, null)
