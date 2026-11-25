@@ -69,7 +69,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/ws", "/ws/**").permitAll()
                         // Laboratorio de endpoints (solo páginas estáticas; ver LaboratorioConfig)
                         .requestMatchers(HttpMethod.GET, "/laboratorio", "/laboratorio/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/semilla-fotos/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/semilla-fotos/**", "/archivos/*/*").permitAll()
 
                         // Documentación OpenAPI / Swagger
                         .requestMatchers(

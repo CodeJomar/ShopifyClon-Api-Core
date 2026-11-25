@@ -1,5 +1,6 @@
 package shopify.api.core.comun.almacenamiento;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -7,7 +8,7 @@ import java.util.UUID;
  * (Supabase Storage, S3, R2, disco local) sin tocar el servicio que la usa.
  * <p>
  * La implementación activa se elige con {@code app.almacenamiento.proveedor}
- * (por defecto {@code supabase}).
+ * ({@code s3} para un bucket compatible con S3, como el de Railway; {@code supabase} por defecto).
  */
 public interface AlmacenamientoImagenes {
 
@@ -21,4 +22,16 @@ public interface AlmacenamientoImagenes {
      * @throws shopify.api.core.comun.excepcion.ExcepcionNegocio si el proveedor falla o no está configurado
      */
     String subir(UUID tiendaId, byte[] contenido, String tipo);
+
+    /** Archivo guardado y su tipo MIME. */
+    record ArchivoAlmacenado(byte[] contenido, String tipo) {
+    }
+
+    /**
+     * Lee un archivo guardado ({@code <tiendaId>/<archivo>}) para servirlo desde la API. Solo lo necesitan los
+     * proveedores con bucket privado (S3/Railway); Supabase entrega sus propias URL públicas y devuelve vacío.
+     */
+    default Optional<ArchivoAlmacenado> leer(String ruta) {
+        return Optional.empty();
+    }
 }

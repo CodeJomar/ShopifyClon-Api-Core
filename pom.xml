@@ -26,6 +26,7 @@
 		<poi.version>5.2.5</poi.version>
 		<openpdf.version>1.3.39</openpdf.version>
 		<stripe.version>26.0.0</stripe.version>
+		<awssdk.version>2.28.29</awssdk.version>
 	</properties>
 
 	<dependencies>
@@ -46,6 +47,28 @@
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<!-- compile (no runtime): el respaldo (R-023) usa el COPY del driver -->
+		</dependency>
+
+		<!-- Almacenamiento S3 (Railway Bucket u otro compatible): cliente HTTP ligero, sin Apache ni Netty -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>${awssdk.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>software.amazon.awssdk</groupId>
+					<artifactId>apache-client</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>software.amazon.awssdk</groupId>
+					<artifactId>netty-nio-client</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>url-connection-client</artifactId>
+			<version>${awssdk.version}</version>
 		</dependency>
 
 		<!-- 4. Seguridad: Spring Security y Hashing BCrypt -->
