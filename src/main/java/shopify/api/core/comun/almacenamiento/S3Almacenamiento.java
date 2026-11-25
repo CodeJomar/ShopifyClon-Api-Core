@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -40,6 +41,7 @@ public class S3Almacenamiento implements AlmacenamientoImagenes {
     private final String bucket;
     private final String urlPublica;
 
+    @Autowired
     public S3Almacenamiento(
             @Value("${app.s3.endpoint:}") String endpoint,
             @Value("${app.s3.region:auto}") String region,
