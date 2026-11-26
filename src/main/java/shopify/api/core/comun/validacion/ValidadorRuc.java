@@ -3,13 +3,13 @@ package shopify.api.core.comun.validacion;
 import java.util.Set;
 
 /**
- * RUC peruano (R-030): 11 dígitos, empieza con 10, 15, 17 o 20 y el último es el dígito verificador de SUNAT
+ * RUC peruano (R-030): exactamente 11 dígitos, empieza con 10 (persona natural) o 20 (persona jurídica) y el último es el dígito verificador de SUNAT
  * (módulo 11 con los pesos 5, 4, 3, 2, 7, 6, 5, 4, 3, 2 sobre los diez primeros). Cálculo puro, sin Spring.
  */
 public final class ValidadorRuc {
 
     private static final int[] PESOS = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
-    private static final Set<String> PREFIJOS = Set.of("10", "15", "17", "20");
+    private static final Set<String> PREFIJOS = Set.of("10", "20");
 
     private ValidadorRuc() {
     }

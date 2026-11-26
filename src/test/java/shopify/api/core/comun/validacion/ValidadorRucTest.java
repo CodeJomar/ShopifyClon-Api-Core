@@ -21,11 +21,13 @@ class ValidadorRucTest {
     }
 
     @Test
-    void rechazaPrefijosQueNoSon10_15_17_20() {
-        for (String prefijo : new String[]{"11", "12", "18", "21", "30", "00", "99"}) {
-            assertThat(ValidadorRuc.esValido(prefijo + "100070970")).as("prefijo " + prefijo).isFalse();
+    void soloAceptaLosPrefijos10Y20() {
+        for (String prefijo : new String[]{"11", "12", "15", "17", "18", "21", "30", "00", "99"}) {
+            // Con dígito verificador correcto: lo único que falla es el prefijo
+            String base = prefijo + "10007097";
+            assertThat(ValidadorRuc.esValido(base + ValidadorRuc.digitoVerificador(base))).as("prefijo " + prefijo).isFalse();
         }
-        for (String prefijo : new String[]{"10", "15", "17", "20"}) {
+        for (String prefijo : new String[]{"10", "20"}) {
             String base = prefijo + "10007097";
             assertThat(ValidadorRuc.esValido(base + ValidadorRuc.digitoVerificador(base))).as("prefijo " + prefijo).isTrue();
         }

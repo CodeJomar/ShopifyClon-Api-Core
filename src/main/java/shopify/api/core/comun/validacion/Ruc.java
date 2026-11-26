@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Ruc {
 
-    String message() default "El RUC no es válido: son 11 dígitos, empieza con 10, 15, 17 o 20 y su dígito verificador debe coincidir";
+    String message() default "El RUC no es válido: son exactamente 11 dígitos, empieza con 10 o 20 y su dígito verificador debe coincidir";
 
     Class<?>[] groups() default {};
 

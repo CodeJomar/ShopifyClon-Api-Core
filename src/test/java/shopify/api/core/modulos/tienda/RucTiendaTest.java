@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import shopify.api.core.comun.validacion.ValidadorRuc;
 import shopify.api.core.soporte.Rutas;
 
 /** R-030: el RUC es obligatorio al crear una tienda, válido (módulo 11) y único por propietario. */
@@ -72,7 +73,11 @@ class RucTiendaTest extends PruebaTiendaBase {
         postJson(Rutas.CUENTA_TIENDAS, cuerpoConRuc("   "), propietario.token(), null)
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.validaciones.ruc").exists());
-        for (String malo : new String[]{"20100070971", "2010007097", "12345678901", "21100070970", "2010007097A", "20100070970000"}) {
+        // 15 y 17 con dígito verificador correcto tampoco se aceptan: solo prefijos 10 y 20
+        String quince = "1510007097" + ValidadorRuc.digitoVerificador("1510007097");
+        String diecisiete = "1710007097" + ValidadorRuc.digitoVerificador("1710007097");
+        for (String malo : new String[]{"20100070971", "2010007097", "12345678901", "21100070970", "2010007097A", "20100070970000",
+                quince, diecisiete}) {
             postJson(Rutas.CUENTA_TIENDAS, cuerpoConRuc(malo), propietario.token(), null)
                     .andExpect(status().isUnprocessableEntity())
                     .andExpect(jsonPath("$.validaciones.ruc").exists());
