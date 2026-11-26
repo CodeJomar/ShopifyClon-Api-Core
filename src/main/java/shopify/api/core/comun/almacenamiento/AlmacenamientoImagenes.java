@@ -23,6 +23,14 @@ public interface AlmacenamientoImagenes {
      */
     String subir(UUID tiendaId, byte[] contenido, String tipo);
 
+    /**
+     * {@code true} si la URL es de una imagen que este almacén guardó para esa tienda (la que devuelve
+     * {@link #subir}). Sirve para aceptar solo imágenes subidas por la tienda (por ejemplo su logo), nunca URL ajenas.
+     */
+    default boolean esUrlPropia(UUID tiendaId, String url) {
+        return false;
+    }
+
     /** Archivo guardado y su tipo MIME. */
     record ArchivoAlmacenado(byte[] contenido, String tipo) {
     }

@@ -22,5 +22,6 @@ public record TiendaConfiguracionResponse(
         boolean estaActiva,
         boolean operativa,
         SuscripcionResumenResponse suscripcion,
-        Instant fechaCreacion) {
+        Instant fechaCreacion,
+        AparienciaResponse apariencia) {
 }

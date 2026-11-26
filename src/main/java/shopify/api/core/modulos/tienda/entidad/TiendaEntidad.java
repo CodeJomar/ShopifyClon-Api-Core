@@ -35,6 +35,22 @@ public class TiendaEntidad extends AuditoriaEntidad {
     @Column(name = "\"CorreoContacto\"", nullable = false, length = 255)
     private String correoContacto;
 
+    /** Apariencia de la vitrina (R-031): códigos de lista blanca con valor por defecto. */
+    @Column(name = "\"Paleta\"", nullable = false, length = 20)
+    private String paleta = "OTEMU";
+
+    @Column(name = "\"Tipografia\"", nullable = false, length = 20)
+    private String tipografia = "MODERNA";
+
+    @Column(name = "\"TamanoLetra\"", nullable = false, length = 20)
+    private String tamanoLetra = "NORMAL";
+
+    @Column(name = "\"Diseno\"", nullable = false, length = 20)
+    private String diseno = "CUADRICULA";
+
+    @Column(name = "\"Modo\"", nullable = false, length = 20)
+    private String modo = "OSCURO";
+
     /** RUC de 11 dígitos, único entre tiendas (R-030). Nulo solo en tiendas anteriores a su introducción. */
     @Column(name = "\"Ruc\"", length = 11)
     private String ruc;

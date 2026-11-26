@@ -6,5 +6,6 @@ public record TiendaVitrinaResponse(
         String subdominio,
         String moneda,
         String correoContacto,
-        boolean preciosIncluyenImpuesto) {
+        boolean preciosIncluyenImpuesto,
+        AparienciaResponse apariencia) {
 }

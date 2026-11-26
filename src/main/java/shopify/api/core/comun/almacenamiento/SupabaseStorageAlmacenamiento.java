@@ -79,6 +79,13 @@ public class SupabaseStorageAlmacenamiento implements AlmacenamientoImagenes {
         return supabaseUrl + "/storage/v1/object/public/" + bucket + "/" + rutaObjeto;
     }
 
+    @Override
+    public boolean esUrlPropia(UUID tiendaId, String url) {
+        String prefijo = supabaseUrl + "/storage/v1/object/public/" + bucket + "/" + tiendaId + "/";
+        return !supabaseUrl.isBlank() && url != null && url.startsWith(prefijo)
+                && url.substring(prefijo.length()).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)");
+    }
+
     /**
      * Verifica que el bucket existe y es accesible. Para uso externo (verificación manual).
      *

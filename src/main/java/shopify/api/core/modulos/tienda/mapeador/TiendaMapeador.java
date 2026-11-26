@@ -5,6 +5,7 @@ import org.mapstruct.Mapping;
 import shopify.api.core.modulos.suscripcion.modelo.SuscripcionVigente;
 import shopify.api.core.modulos.tienda.dto.response.MiTiendaResponse;
 import shopify.api.core.modulos.tienda.dto.response.SuscripcionResumenResponse;
+import shopify.api.core.modulos.tienda.dto.response.AparienciaResponse;
 import shopify.api.core.modulos.tienda.dto.response.TiendaConfiguracionResponse;
 import shopify.api.core.modulos.tienda.dto.response.TiendaCreadaResponse;
 import shopify.api.core.modulos.tienda.dto.response.TiendaVitrinaResponse;
@@ -21,7 +22,14 @@ public interface TiendaMapeador {
 
     MiTiendaResponse aMiTienda(MiTiendaVista vista, boolean operativa);
 
+    @Mapping(target = "apariencia", source = "tienda")
     TiendaConfiguracionResponse aConfiguracion(TiendaEntidad tienda, boolean operativa, SuscripcionResumenResponse suscripcion);
 
+    @Mapping(target = "apariencia", source = "tienda")
     TiendaVitrinaResponse aVitrina(TiendaEntidad tienda);
+
+    default AparienciaResponse aApariencia(TiendaEntidad tienda) {
+        return new AparienciaResponse(tienda.getPaleta(), tienda.getTipografia(), tienda.getTamanoLetra(), tienda.getDiseno(),
+                tienda.getModo(), tienda.getUrlLogo());
+    }
 }

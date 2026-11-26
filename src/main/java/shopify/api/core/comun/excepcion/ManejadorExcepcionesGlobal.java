@@ -51,6 +51,12 @@ public class ManejadorExcepcionesGlobal {
                 request.getRequestURI(), validaciones, null);
     }
 
+    @ExceptionHandler(ValidacionCamposException.class)
+    public ResponseEntity<RespuestaApi<Void>> manejarValidacionDeServicio(ValidacionCamposException ex, HttpServletRequest request) {
+        return RespuestaApi.error(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-001", "Revisa los datos marcados",
+                request.getRequestURI(), ex.getValidaciones(), null);
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<RespuestaApi<Void>> manejarCuerpoIlegible(
             HttpMessageNotReadableException ex, HttpServletRequest request) {

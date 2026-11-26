@@ -25,6 +25,7 @@ import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.ProductoMe
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.ResumenMercado;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.TiendaMercadoDetalleResponse;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.TiendaMercadoResponse;
+import shopify.api.core.modulos.tienda.dto.response.AparienciaResponse;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.TiendaResumen;
 import shopify.api.core.modulos.mercado.dto.response.MercadoResponses.VarianteResumen;
 import shopify.api.core.modulos.mercado.modelo.CategoriaMercado;
@@ -101,7 +102,9 @@ public class MercadoServicio {
         List<CategoriaMercadoResponse> categorias = repositorio.categorias(tienda.subdominio()).stream()
                 .map(MercadoServicio::aCategoria).toList();
         return new TiendaMercadoDetalleResponse(tienda.nombre(), tienda.subdominio(), tienda.descripcion(), tienda.logoUrl(),
-                tienda.moneda(), tienda.cantidadProductos(), categorias);
+                tienda.moneda(), tienda.cantidadProductos(), categorias,
+                new AparienciaResponse(tienda.paleta(), tienda.tipografia(), tienda.tamanoLetra(), tienda.diseno(), tienda.modo(),
+                        tienda.logoUrl()));
     }
 
     public List<CategoriaMercadoResponse> categorias() {

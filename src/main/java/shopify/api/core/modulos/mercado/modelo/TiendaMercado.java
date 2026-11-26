@@ -7,5 +7,10 @@ public record TiendaMercado(
         String descripcion,
         String logoUrl,
         String moneda,
-        long cantidadProductos) {
+        long cantidadProductos,
+        String paleta,
+        String tipografia,
+        String tamanoLetra,
+        String diseno,
+        String modo) {
 }

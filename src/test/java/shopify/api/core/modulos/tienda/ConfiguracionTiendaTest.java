@@ -181,14 +181,14 @@ class ConfiguracionTiendaTest extends PruebaTiendaBase {
     }
 
     @Test
-    void laVitrinaMuestraSoloLosCincoCamposPublicos() throws Exception {
+    void laVitrinaMuestraSoloLosCamposPublicos() throws Exception {
         JsonNode datos = cuerpo(getConToken(Rutas.vitrina(subdominio.toUpperCase()), null, null)
                 .andExpect(status().isOk())).get("datos");
 
         List<String> campos = new ArrayList<>();
         datos.fieldNames().forEachRemaining(campos::add);
         assertThat(campos).containsExactlyInAnyOrder(
-                "nombre", "subdominio", "moneda", "correo_contacto", "precios_incluyen_impuesto");
+                "nombre", "subdominio", "moneda", "correo_contacto", "precios_incluyen_impuesto", "apariencia");
         assertThat(datos.get("subdominio").asText()).isEqualTo(subdominio);
     }
 

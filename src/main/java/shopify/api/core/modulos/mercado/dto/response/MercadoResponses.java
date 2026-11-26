@@ -3,6 +3,7 @@ package shopify.api.core.modulos.mercado.dto.response;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import shopify.api.core.modulos.tienda.dto.response.AparienciaResponse;
 
 /** Respuestas públicas del mercado (R-001). Nada de costos, inventario exacto ni datos del propietario. */
 public final class MercadoResponses {
@@ -54,7 +55,8 @@ public final class MercadoResponses {
             String logoUrl,
             String moneda,
             long cantidadProductos,
-            List<CategoriaMercadoResponse> categorias) {
+            List<CategoriaMercadoResponse> categorias,
+            AparienciaResponse apariencia) {
     }
 
     public record CategoriaMercadoResponse(String nombre, String slug, long cantidadProductos) {

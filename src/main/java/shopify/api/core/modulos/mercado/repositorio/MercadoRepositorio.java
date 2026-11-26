@@ -67,7 +67,12 @@ public class MercadoRepositorio {
             rs.getString("descripcion"),
             rs.getString("logo_url"),
             rs.getString("moneda"),
-            rs.getLong("cantidad"));
+            rs.getLong("cantidad"),
+            rs.getString("paleta"),
+            rs.getString("tipografia"),
+            rs.getString("tamano_letra"),
+            rs.getString("diseno"),
+            rs.getString("modo"));
 
     private static final RowMapper<CategoriaMercado> FILA_CATEGORIA = (rs, fila) -> new CategoriaMercado(
             rs.getString("nombre"), rs.getString("slug"), rs.getLong("cantidad"));
@@ -183,7 +188,9 @@ public class MercadoRepositorio {
 
     private static final String COLUMNAS_TIENDA = """
             SELECT t."Nombre" AS nombre, t."Subdominio" AS subdominio, t."Descripcion" AS descripcion,
-                   t."UrlLogo" AS logo_url, t."Moneda" AS moneda, c.cantidad AS cantidad
+                   t."UrlLogo" AS logo_url, t."Moneda" AS moneda, c.cantidad AS cantidad,
+                   t."Paleta" AS paleta, t."Tipografia" AS tipografia, t."TamanoLetra" AS tamano_letra,
+                   t."Diseno" AS diseno, t."Modo" AS modo
             """;
 
     /** Tiendas visibles con al menos un producto visible; {@code texto} ya normalizado y escapado (o nulo). */

@@ -15,6 +15,9 @@ import shopify.api.core.comun.dto.RespuestaApi;
 import shopify.api.core.comun.seguridad.ContextoTienda;
 import shopify.api.core.comun.seguridad.PermitidoSinSuscripcion;
 import shopify.api.core.comun.seguridad.Permiso;
+import shopify.api.core.modulos.tienda.dto.request.ActualizarAparienciaRequest;
+import shopify.api.core.modulos.tienda.dto.response.AparienciaResponse;
+import shopify.api.core.modulos.tienda.servicio.AparienciaTiendaServicio;
 import shopify.api.core.comun.seguridad.RequierePermiso;
 import shopify.api.core.modulos.tienda.dto.request.ActualizarTiendaRequest;
 import shopify.api.core.modulos.tienda.dto.request.CambioEstadoTiendaRequest;
@@ -28,6 +31,7 @@ import shopify.api.core.modulos.tienda.servicio.TiendaServicio;
 public class TiendaPanelControlador {
 
     private final TiendaServicio tiendaServicio;
+    private final AparienciaTiendaServicio aparienciaServicio;
 
     @Operation(summary = "Ver la configuración de la tienda (cualquier miembro)")
     @GetMapping
@@ -41,6 +45,14 @@ public class TiendaPanelControlador {
     public ResponseEntity<RespuestaApi<TiendaConfiguracionResponse>> actualizar(
             ContextoTienda contexto, @Valid @RequestBody ActualizarTiendaRequest request) {
         return RespuestaApi.ok(tiendaServicio.actualizarConfiguracion(contexto, request), "Configuración actualizada");
+    }
+
+    @Operation(summary = "Cambiar la apariencia de la vitrina (paleta, tipografía, tamaño, diseño, modo y logo)")
+    @PutMapping("/apariencia")
+    @RequierePermiso(Permiso.TIENDA_CONFIGURAR)
+    public ResponseEntity<RespuestaApi<AparienciaResponse>> apariencia(
+            ContextoTienda contexto, @Valid @RequestBody ActualizarAparienciaRequest request) {
+        return RespuestaApi.ok(aparienciaServicio.cambiar(contexto, request), "Apariencia actualizada");
     }
 
     @Operation(summary = "Activar la tienda (solo el propietario)")
