@@ -14,4 +14,6 @@ public interface MiTiendaVista {
     String getRol();
 
     Boolean getEstaActiva();
+
+    String getRuc();
 }

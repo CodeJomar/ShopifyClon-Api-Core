@@ -30,6 +30,7 @@ abstract class PruebaTiendaBase extends PruebaIntegracionBase {
         Map<String, Object> cuerpo = new LinkedHashMap<>();
         cuerpo.put("nombre", "Tienda " + subdominio);
         cuerpo.put("subdominio", subdominio);
+        cuerpo.put("ruc", rucUnico());
         cuerpo.put("correo_contacto", "contacto@prueba.test");
         return cuerpo;
     }

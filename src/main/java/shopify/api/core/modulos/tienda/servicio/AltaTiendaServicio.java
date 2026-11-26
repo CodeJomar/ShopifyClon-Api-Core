@@ -12,6 +12,7 @@ import shopify.api.core.comun.auditoria.AccionAuditoria;
 import shopify.api.core.comun.auditoria.AuditoriaServicio;
 import shopify.api.core.comun.seguridad.RolTienda;
 import shopify.api.core.comun.seguridad.SesionActual;
+import shopify.api.core.comun.validacion.ValidadorRuc;
 import shopify.api.core.modulos.balance.servicio.BalanceServicio;
 import shopify.api.core.modulos.suscripcion.modelo.SuscripcionVigente;
 import shopify.api.core.modulos.suscripcion.servicio.SuscripcionServicio;
@@ -55,6 +56,11 @@ public class AltaTiendaServicio {
         if (tiendaRepositorio.existsBySubdominio(subdominio)) {
             throw ValidadorSubdominio.enUso();
         }
+        // El formato ya lo validó @Ruc; aquí se normaliza (sin espacios ni guiones) y se comprueba que no sea de otro propietario (TIE-010)
+        String ruc = ValidadorRuc.normalizar(request.ruc());
+        if (tiendaRepositorio.existsByRucAndEliminadoFalseAndPropietarioIdNot(ruc, propietarioId)) {
+            throw TiendaServicio.rucEnUso();
+        }
 
         // Se consulta antes de insertar la tienda para no contar la que se está creando (SUS-016)
         boolean gratuita = suscripcionServicio.esPlanGratuito(request.codigoPlan());
@@ -64,13 +70,15 @@ public class AltaTiendaServicio {
         tienda.setPropietarioId(propietarioId);
         tienda.setNombre(request.nombre().trim());
         tienda.setSubdominio(subdominio);
+        tienda.setRuc(ruc);
         tienda.setCorreoContacto(request.correoContacto().trim().toLowerCase(Locale.ROOT));
         tienda.setMoneda(request.moneda() == null || request.moneda().isBlank() ? MONEDA_POR_DEFECTO : request.moneda());
         try {
             tienda = tiendaRepositorio.saveAndFlush(tienda);
         } catch (DataIntegrityViolationException ex) {
-            // Carrera por el subdominio: UqTiendasSubdominio
-            throw ValidadorSubdominio.enUso();
+            // Carrera por el RUC (ExTiendasRucPorPropietario) o por el subdominio (UqTiendasSubdominio)
+            String causa = String.valueOf(ex.getMostSpecificCause().getMessage());
+            throw causa.contains("ExTiendasRucPorPropietario") ? TiendaServicio.rucEnUso() : ValidadorSubdominio.enUso();
         }
 
         RolEntidad rolPropietario = rolRepositorio.findByCodigoAndEliminadoFalse(RolTienda.PROPIETARIO.name())

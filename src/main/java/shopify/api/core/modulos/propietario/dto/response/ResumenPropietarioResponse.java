@@ -29,6 +29,7 @@ public record ResumenPropietarioResponse(
             UUID tiendaId,
             String nombre,
             String subdominio,
+            String ruc,
             String moneda,
             String estadoSuscripcion,
             String codigoPlan,

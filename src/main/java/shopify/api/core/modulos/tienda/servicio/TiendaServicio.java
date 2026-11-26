@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,7 @@ import shopify.api.core.comun.excepcion.RecursoNoEncontradoException;
 import shopify.api.core.comun.excepcion.ReglaNegocioException;
 import shopify.api.core.comun.seguridad.ContextoTienda;
 import shopify.api.core.comun.seguridad.SesionActual;
+import shopify.api.core.comun.validacion.ValidadorRuc;
 import shopify.api.core.modulos.suscripcion.modelo.SuscripcionVigente;
 import shopify.api.core.modulos.suscripcion.servicio.SuscripcionServicio;
 import shopify.api.core.modulos.tienda.dto.request.ActualizarTiendaRequest;
@@ -73,6 +75,19 @@ public class TiendaServicio {
     public TiendaConfiguracionResponse actualizarConfiguracion(ContextoTienda contexto, ActualizarTiendaRequest request) {
         TiendaEntidad tienda = buscar(contexto);
 
+        // R-030: ausente conserva el RUC actual (las tiendas anteriores pueden no tenerlo); solo el propietario lo cambia (TIE-012)
+        String ruc = ValidadorRuc.normalizar(request.ruc());
+        String rucAnterior = tienda.getRuc();
+        if (ruc != null && !ruc.equals(rucAnterior)) {
+            if (!contexto.esPropietario()) {
+                throw new AccesoDenegadoException("TIE-012", "Solo el propietario puede cambiar el RUC de la tienda");
+            }
+            if (tiendaRepositorio.existsByRucAndEliminadoFalseAndPropietarioIdNot(ruc, tienda.getPropietarioId())) {
+                throw rucEnUso();
+            }
+            tienda.setRuc(ruc);
+        }
+
         if (!ZoneId.getAvailableZoneIds().contains(request.zonaHoraria().trim())) {
             throw new ReglaNegocioException("TIE-006", "La zona horaria no es válida");
         }
@@ -95,7 +110,23 @@ public class TiendaServicio {
         if (request.visibleEnMercado() != null) {
             tienda.setVisibleEnMercado(request.visibleEnMercado());
         }
-        return aConfiguracion(tiendaRepositorio.saveAndFlush(tienda));
+        TiendaEntidad guardada;
+        try {
+            guardada = tiendaRepositorio.saveAndFlush(tienda);
+        } catch (DataIntegrityViolationException ex) {
+            // Carrera por el mismo RUC entre dos propietarios (ExTiendasRucPorPropietario)
+            throw String.valueOf(ex.getMostSpecificCause().getMessage()).contains("ExTiendasRucPorPropietario") ? rucEnUso() : ex;
+        }
+        if (!java.util.Objects.equals(rucAnterior, guardada.getRuc())) {
+            auditoriaServicio.registrar(guardada.getId(), AccionAuditoria.TIENDA_RUC_CAMBIADO, "Tiendas", guardada.getId(), null,
+                    Map.of("anterior", rucAnterior == null ? "SIN_RUC" : rucAnterior, "nuevo", guardada.getRuc() == null ? "SIN_RUC" : guardada.getRuc()));
+        }
+        return aConfiguracion(guardada);
+    }
+
+    /** TIE-010: el RUC ya lo usa una tienda de otro propietario. */
+    public static ConflictoEstadoException rucEnUso() {
+        return new ConflictoEstadoException("TIE-010", "Ese RUC ya está registrado por otro propietario");
     }
 
     /** TIE-008: solo el propietario activa la tienda; ya activa no cambia ni audita. */

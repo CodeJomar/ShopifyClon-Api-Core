@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import shopify.api.core.comun.validacion.Ruc;
 import java.math.BigDecimal;
 
 public record ActualizarTiendaRequest(
@@ -45,5 +46,9 @@ public record ActualizarTiendaRequest(
         @Pattern(regexp = "^$|^https://\\S+$", message = "La URL del logo debe comenzar con https://")
         String urlLogo,
         /** Ausente conserva el valor actual. */
-        Boolean visibleEnMercado) {
+        Boolean visibleEnMercado,
+        /** Ausente conserva el RUC actual. Solo el propietario lo cambia (TIE-012). */
+        @Size(max = 20, message = "El RUC no puede superar los 20 caracteres")
+        @Ruc
+        String ruc) {
 }

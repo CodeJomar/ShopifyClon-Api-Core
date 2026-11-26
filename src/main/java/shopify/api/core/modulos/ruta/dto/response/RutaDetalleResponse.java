@@ -18,8 +18,8 @@ public record RutaDetalleResponse(
         Remitente tienda,
         List<Parada> paradas) {
 
-    /** Remitente de la guía. Teléfono y dirección no se guardan en la tienda todavía: salen ausentes. */
-    public record Remitente(String nombre, String correoElectronico, String telefono, String direccion) {
+    /** Emisor de la guía. Teléfono y dirección no se guardan en la tienda todavía: salen ausentes. {@code ruc} es el de la tienda. */
+    public record Remitente(String nombre, String ruc, String correoElectronico, String telefono, String direccion) {
     }
 
     public record Parada(

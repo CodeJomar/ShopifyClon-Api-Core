@@ -6,4 +6,6 @@ public interface RemitenteVista {
     String getNombre();
 
     String getCorreo();
+
+    String getRuc();
 }

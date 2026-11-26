@@ -6,6 +6,7 @@ public record MiTiendaResponse(
         UUID tiendaId,
         String nombre,
         String subdominio,
+        String ruc,
         String rol,
         boolean estaActiva,
         boolean operativa) {

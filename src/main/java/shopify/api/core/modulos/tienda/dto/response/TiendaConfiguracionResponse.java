@@ -12,6 +12,7 @@ public record TiendaConfiguracionResponse(
         String dominioPersonalizado,
         String moneda,
         String correoContacto,
+        String ruc,
         BigDecimal tasaImpuesto,
         boolean preciosIncluyenImpuesto,
         String zonaHoraria,

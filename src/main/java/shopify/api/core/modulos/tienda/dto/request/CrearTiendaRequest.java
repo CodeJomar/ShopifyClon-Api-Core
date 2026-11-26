@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import shopify.api.core.comun.validacion.Ruc;
 
 public record CrearTiendaRequest(
         @NotBlank(message = "El nombre de la tienda es obligatorio")
@@ -13,6 +14,10 @@ public record CrearTiendaRequest(
         @NotBlank(message = "El subdominio es obligatorio")
         @Size(max = 63, message = "El subdominio no puede superar los 63 caracteres")
         String subdominio,
+        @NotBlank(message = "El RUC es obligatorio")
+        @Size(max = 20, message = "El RUC no puede superar los 20 caracteres")
+        @Ruc
+        String ruc,
 
         @NotBlank(message = "El correo de contacto es obligatorio")
         @Email(message = "El formato de correo no es válido")

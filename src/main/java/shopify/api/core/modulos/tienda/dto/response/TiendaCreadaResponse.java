@@ -6,6 +6,7 @@ public record TiendaCreadaResponse(
         UUID id,
         String nombre,
         String subdominio,
+        String ruc,
         SuscripcionResumenResponse suscripcion,
         boolean operativa) {
 }

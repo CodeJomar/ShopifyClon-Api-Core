@@ -61,6 +61,12 @@ public abstract class PruebaIntegracionBase {
     @Autowired
     protected JwtProveedor jwtProveedor;
 
+    /** RUC válido (módulo 11) y distinto en cada llamada, para las pruebas que crean tiendas por la API. */
+    protected String rucUnico() {
+        String base = "20" + String.format("%08d", java.util.concurrent.ThreadLocalRandom.current().nextInt(100_000_000));
+        return base + shopify.api.core.comun.validacion.ValidadorRuc.digitoVerificador(base);
+    }
+
     /** Texto único por llamada para correos, subdominios y nombres de prueba. */
     protected String sufijo() {
         return Long.toString(System.nanoTime(), 36) + CONTADOR.incrementAndGet();

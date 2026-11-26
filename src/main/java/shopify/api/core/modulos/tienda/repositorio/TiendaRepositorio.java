@@ -31,6 +31,9 @@ public interface TiendaRepositorio extends JpaRepository<TiendaEntidad, UUID> {
             + "WHERE t.\"Id\" = :tiendaId", nativeQuery = true)
     Optional<String> correoDelPropietario(@Param("tiendaId") UUID tiendaId);
 
+    /** TIE-010: ese RUC ya lo usa una tienda no eliminada de otro propietario (el mismo propietario puede repetirlo). */
+    boolean existsByRucAndEliminadoFalseAndPropietarioIdNot(String ruc, UUID propietarioId);
+
     /** TIE-005: con alguna orden la moneda ya no se puede cambiar. */
     @Query(value = "SELECT EXISTS (SELECT 1 FROM \"Ordenes\" WHERE \"TiendaId\" = :tiendaId)", nativeQuery = true)
     boolean tieneOrdenes(@Param("tiendaId") UUID tiendaId);
@@ -38,7 +41,7 @@ public interface TiendaRepositorio extends JpaRepository<TiendaEntidad, UUID> {
     @Query(value = """
             SELECT t."Id" AS "tiendaId", t."Nombre" AS "nombre", t."Subdominio" AS "subdominio",
                    CASE WHEN t."PropietarioId" = :usuarioId THEN 'PROPIETARIO' ELSE r."Codigo" END AS "rol",
-                   t."EstaActiva" AS "estaActiva"
+                   t."EstaActiva" AS "estaActiva", t."Ruc" AS "ruc"
             FROM "Tiendas" t
             LEFT JOIN "PersonalTienda" p ON p."TiendaId" = t."Id" AND p."UsuarioId" = :usuarioId AND p."Eliminado" = FALSE
             LEFT JOIN "Roles" r ON r."Id" = p."RolId" AND r."Eliminado" = FALSE

@@ -274,6 +274,7 @@ public class RutaServicio {
 
         List<Parada> lista = vistas.stream().map(v -> parada(v, itemsPorOrden.getOrDefault(v.getOrdenId(), List.of()))).toList();
         Remitente tienda = new Remitente(remitente == null ? null : remitente.getNombre(),
+                remitente == null ? null : remitente.getRuc(),
                 remitente == null ? null : remitente.getCorreo(), null, null);
         return new RutaDetalleResponse(ruta.getId(), ruta.getCodigo(), ruta.getFecha(), ruta.getChofer(), ruta.getPlaca(),
                 ruta.getEstado(), ruta.getNota(), tienda, lista);

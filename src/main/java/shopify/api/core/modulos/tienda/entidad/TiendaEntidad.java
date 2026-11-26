@@ -35,6 +35,10 @@ public class TiendaEntidad extends AuditoriaEntidad {
     @Column(name = "\"CorreoContacto\"", nullable = false, length = 255)
     private String correoContacto;
 
+    /** RUC de 11 dígitos, único entre tiendas (R-030). Nulo solo en tiendas anteriores a su introducción. */
+    @Column(name = "\"Ruc\"", length = 11)
+    private String ruc;
+
     @Column(name = "\"EstaActiva\"", nullable = false)
     private Boolean estaActiva = true;
 

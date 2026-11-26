@@ -33,7 +33,7 @@ public class AlertasPropietarioRepositorio {
     /** Tiendas de las que la persona es propietaria, con su suscripción vigente (si la hay) y su plan. */
     public List<Map<String, Object>> tiendasDelPropietario(UUID usuarioId, int limite) {
         return jdbc.queryForList("""
-                SELECT t."Id", t."Nombre", t."Subdominio", t."Moneda", t."ZonaHoraria", t."EstaActiva",
+                SELECT t."Id", t."Nombre", t."Subdominio", t."Ruc", t."Moneda", t."ZonaHoraria", t."EstaActiva",
                        s."Estado" AS estado, p."Codigo" AS plan
                 FROM "Tiendas" t
                 LEFT JOIN "SuscripcionesTienda" s ON s."TiendaId" = t."Id" AND s."Estado" <> 'CANCELADA' AND s."Eliminado" = FALSE

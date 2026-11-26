@@ -53,7 +53,7 @@ public interface RutaRepositorio extends JpaRepository<RutaEntidad, UUID> {
     Optional<String> zonaHorariaDe(@Param("tiendaId") UUID tiendaId);
 
     @Query(value = """
-            SELECT t."Nombre" AS "nombre", t."CorreoContacto" AS "correo"
+            SELECT t."Nombre" AS "nombre", t."CorreoContacto" AS "correo", t."Ruc" AS "ruc"
             FROM "Tiendas" t WHERE t."Id" = :tiendaId
             """, nativeQuery = true)
     Optional<RemitenteVista> remitenteDe(@Param("tiendaId") UUID tiendaId);

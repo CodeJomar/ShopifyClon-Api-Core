@@ -48,7 +48,7 @@ class PuntaAPuntaTest extends PruebaIntegracionBase {
         // 2. Tienda: nace con prueba vigente, así que el panel puede escribir
         String subdominio = "punta-" + sufijo();
         UUID tienda = idDe(cuerpo(postJson(Rutas.CUENTA_TIENDAS, Map.of("nombre", "Punta a punta", "subdominio", subdominio,
-                "correo_contacto", "contacto@prueba.test"), jwt, null).andExpect(status().isCreated())));
+                "ruc", rucUnico(), "correo_contacto", "contacto@prueba.test"), jwt, null).andExpect(status().isCreated())));
 
         // 3. Tarifa de envío, categoría y producto con dos variantes e imagen, publicado
         UUID tarifa = idDe(cuerpo(postJson(Rutas.PANEL_ENVIOS_TARIFAS, Map.of("nombre", "Estandar", "precio", "5.00"), jwt, tienda)

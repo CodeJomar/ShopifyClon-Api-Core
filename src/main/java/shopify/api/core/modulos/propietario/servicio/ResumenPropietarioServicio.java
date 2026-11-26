@@ -112,7 +112,7 @@ public class ResumenPropietarioServicio {
             String estado = (String) t.get("estado");
             boolean operativa = Boolean.TRUE.equals(t.get("EstaActiva")) && estado != null
                     && EstadoSuscripcion.valueOf(estado).permiteOperar();
-            filas.add(new TiendaResumen(id, (String) t.get("Nombre"), (String) t.get("Subdominio"), moneda, estado,
+            filas.add(new TiendaResumen(id, (String) t.get("Nombre"), (String) t.get("Subdominio"), (String) t.get("Ruc"), moneda, estado,
                     (String) t.get("plan"), operativa, ventas, ordenes, saldo,
                     new Alertas(porPreparar.getOrDefault(id, 0L), stockBajo.getOrDefault(id, 0L))));
         }

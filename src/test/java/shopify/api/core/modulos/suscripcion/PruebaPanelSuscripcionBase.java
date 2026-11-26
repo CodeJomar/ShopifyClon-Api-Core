@@ -35,6 +35,7 @@ public abstract class PruebaPanelSuscripcionBase extends PruebaSuscripcionBase {
         Map<String, Object> cuerpoTienda = new LinkedHashMap<>();
         cuerpoTienda.put("nombre", "Tienda " + subdominio);
         cuerpoTienda.put("subdominio", subdominio);
+        cuerpoTienda.put("ruc", rucUnico());
         cuerpoTienda.put("correo_contacto", "contacto@prueba.test");
         JsonNode datos = cuerpo(postJson(Rutas.CUENTA_TIENDAS, cuerpoTienda, propietario.token(), null)
                 .andExpect(status().isCreated())).get("datos");
