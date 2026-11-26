@@ -94,13 +94,6 @@ public class S3Almacenamiento implements AlmacenamientoImagenes {
     }
 
     @Override
-    public boolean esUrlPropia(UUID tiendaId, String url) {
-        String prefijo = urlPublica + "/archivos/" + tiendaId + "/";
-        return url != null && url.startsWith(prefijo)
-                && url.substring(prefijo.length()).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)");
-    }
-
-    @Override
     public Optional<ArchivoAlmacenado> leer(String ruta) {
         if (cliente == null) {
             return Optional.empty();

@@ -7,8 +7,8 @@ import shopify.api.core.modulos.tienda.modelo.OpcionesApariencia;
 
 /**
  * Apariencia completa de la vitrina: los cinco códigos son obligatorios (lista blanca). {@code logo_url}: ausente
- * conserva el logo actual, {@code null} (o vacío) lo quita, y un valor debe ser una imagen subida por esta tienda al
- * almacén de la API (se valida en el servicio). Es una clase y no un {@code record} para poder distinguir «ausente»
+ * conserva el logo actual, {@code null} (o vacío) lo quita, y un valor debe ser una URL https válida, subida a la API
+ * o externa (se valida en el servicio). Es una clase y no un {@code record} para poder distinguir «ausente»
  * de «null»: el setter solo se llama cuando la clave viene en el JSON.
  */
 public class ActualizarAparienciaRequest {

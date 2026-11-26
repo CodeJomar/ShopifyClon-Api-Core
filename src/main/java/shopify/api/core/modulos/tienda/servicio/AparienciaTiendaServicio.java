@@ -4,7 +4,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import shopify.api.core.comun.almacenamiento.AlmacenamientoImagenes;
 import shopify.api.core.comun.auditoria.AccionAuditoria;
 import shopify.api.core.comun.auditoria.AuditoriaServicio;
 import shopify.api.core.comun.cache.CacheTemporal;
@@ -19,16 +18,16 @@ import shopify.api.core.modulos.tienda.dto.response.OpcionesAparienciaResponse.P
 import shopify.api.core.modulos.tienda.entidad.TiendaEntidad;
 import shopify.api.core.modulos.tienda.mapeador.TiendaMapeador;
 import shopify.api.core.modulos.tienda.modelo.OpcionesApariencia;
+import shopify.api.core.modulos.tienda.modelo.ValidadorUrlLogo;
 import shopify.api.core.modulos.tienda.repositorio.TiendaRepositorio;
 
-/** Apariencia de la vitrina (R-031): cinco códigos de lista blanca y el logo. Los cambios quedan auditados. */
+/** Apariencia de la vitrina (R-031): cinco códigos de lista blanca y el logo (URL https). Los cambios quedan auditados. */
 @Service
 @RequiredArgsConstructor
 public class AparienciaTiendaServicio {
 
     private final TiendaRepositorio tiendaRepositorio;
     private final TiendaMapeador mapeador;
-    private final AlmacenamientoImagenes almacenamiento;
     private final AuditoriaServicio auditoriaServicio;
     private final CacheTemporal cache;
 
@@ -43,11 +42,10 @@ public class AparienciaTiendaServicio {
             String url = solicitud.logoUrl() == null ? "" : solicitud.logoUrl().strip();
             if (url.isEmpty()) {
                 tienda.setUrlLogo(null);
-            } else if (almacenamiento.esUrlPropia(tienda.getId(), url)) {
+            } else if (ValidadorUrlLogo.esValida(url)) {
                 tienda.setUrlLogo(url);
             } else {
-                throw new ValidacionCamposException(Map.of("logo_url",
-                        "El logo debe ser una imagen subida desde el panel de la tienda"));
+                throw new ValidacionCamposException(Map.of("logo_url", ValidadorUrlLogo.MENSAJE));
             }
         }
         tienda.setPaleta(solicitud.paleta());

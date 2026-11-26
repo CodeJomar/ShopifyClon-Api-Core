@@ -19,7 +19,7 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import shopify.api.core.modulos.tienda.modelo.OpcionesApariencia;
 import shopify.api.core.soporte.Rutas;
 
-/** R-031: apariencia de la vitrina (cinco códigos de lista blanca y logo propio). */
+/** R-031: apariencia de la vitrina (cinco códigos de lista blanca y logo por URL https). */
 class AparienciaTiendaTest extends PruebaTiendaBase {
 
     private static final String PANEL = "/panel/tienda/apariencia";
@@ -45,7 +45,7 @@ class AparienciaTiendaTest extends PruebaTiendaBase {
     }
 
     private String logoPropio(UUID tienda) {
-        return "http://localhost/storage/v1/object/public/test-bucket/" + tienda + "/" + UUID.randomUUID() + ".png";
+        return "https://api.ejemplo.test/api/v1/archivos/" + tienda + "/" + UUID.randomUUID() + ".png";
     }
 
     private String subdominioDe(UUID tienda) {
@@ -176,24 +176,40 @@ class AparienciaTiendaTest extends PruebaTiendaBase {
     }
 
     @Test
-    void elLogoDebeSerUnaImagenSubidaPorLaPropiaTienda() throws Exception {
+    void elLogoAceptaUnaUrlHttpsPropiaOExternaYRechazaElResto() throws Exception {
         Sesion propietario = nuevaSesion();
         UUID tienda = crearTiendaPorApi(propietario, subdominioUnico());
-        UUID otra = crearTiendaPorApi(nuevaSesion(), subdominioUnico());
 
-        for (String malo : List.of("https://evil.example/logo.png", "javascript:alert(1)", logoPropio(otra),
-                "http://localhost/storage/v1/object/public/test-bucket/" + tienda + "/no-es-uuid.png",
-                "http://localhost/storage/v1/object/public/test-bucket/" + tienda + "/" + UUID.randomUUID() + ".gif",
-                "http://localhost/storage/v1/object/public/test-bucket/" + tienda + "/../" + UUID.randomUUID() + ".png")) {
+        for (String malo : List.of("http://cdn.ejemplo.test/logo.png", "javascript:alert(1)", "data:image/png;base64,AAAA",
+                "ftp://cdn.ejemplo.test/logo.png", "//cdn.ejemplo.test/logo.png", "https://", "https:///logo.png",
+                "https://cdn.ejemplo.test/mi logo.png", "https://cdn.ejemplo.test/mi\tlogo.png", "https://usuario:clave@cdn.ejemplo.test/logo.png",
+                "https://cdn.ejemplo.test/\"onerror=alert(1)", "https://cdn.ejemplo.test/<script>", "logo.png",
+                "https://cdn.ejemplo.test/" + "a".repeat(500))) {
             Map<String, Object> cuerpo = new LinkedHashMap<>(distinta());
             cuerpo.put("logo_url", malo);
-            putJson(PANEL, cuerpo, propietario.token(), tienda).andExpect(status().isUnprocessableEntity())
-                    .andExpect(jsonPath("$.codigo").value("VAL-001"))
-                    .andExpect(jsonPath("$.validaciones.logo_url").exists());
+            ResultActions respuesta = putJson(PANEL, cuerpo, propietario.token(), tienda);
+            assertThat(respuesta.andReturn().getResponse().getStatus()).as("logo rechazado: " + malo).isEqualTo(422);
+            respuesta.andExpect(jsonPath("$.codigo").value("VAL-001")).andExpect(jsonPath("$.validaciones.logo_url").exists());
         }
         assertThat(jdbc.queryForObject("SELECT \"UrlLogo\" FROM \"Tiendas\" WHERE \"Id\" = ?", String.class, tienda)).isNull();
 
-        // Un logo propio se acepta y aparece en el panel y en lo público
+        // Los espacios y saltos de línea de los extremos (al pegar la URL) se recortan antes de validar
+        Map<String, Object> conBordes = new LinkedHashMap<>(distinta());
+        conBordes.put("logo_url", "  https://cdn.ejemplo.test/recortado.png\n");
+        putJson(PANEL, conBordes, propietario.token(), tienda).andExpect(status().isOk())
+                .andExpect(jsonPath("$.datos.logo_url").value("https://cdn.ejemplo.test/recortado.png"));
+
+        // Una URL externa https, una subida a la API y una de exactamente 500 caracteres se aceptan
+        String externa = "https://cdn.ejemplo.test/mi-logo.png?v=2";
+        Map<String, Object> conExterna = new LinkedHashMap<>(distinta());
+        conExterna.put("logo_url", externa);
+        putJson(PANEL, conExterna, propietario.token(), tienda).andExpect(status().isOk()).andExpect(jsonPath("$.datos.logo_url").value(externa));
+        String limite = "https://cdn.ejemplo.test/" + "a".repeat(500 - "https://cdn.ejemplo.test/".length());
+        assertThat(limite).hasSize(500);
+        conExterna.put("logo_url", limite);
+        putJson(PANEL, conExterna, propietario.token(), tienda).andExpect(status().isOk());
+
+        // Uno subido a la API y devuelto por POST /panel/archivos/imagenes también
         String logo = logoPropio(tienda);
         Map<String, Object> conLogo = new LinkedHashMap<>(distinta());
         conLogo.put("logo_url", logo);
